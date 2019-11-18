@@ -1,0 +1,17 @@
+*.o
+tests/CMakeFiles/*
+*.swp
+CMakeFiles
+CMakeFiles/*
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+build
+
+*log.txt
+*dialogue.txt
+
+tests/*.txt
+
+air_client
+air_server
