@@ -38,6 +38,11 @@ struct ClientTcb {
   std::shared_ptr<SegmentBuffer> tail;     // Tail of send buffer
 
   unsigned int unacked;  // Number of sent-but-not-Acked segments
+
+  ClientTcb(): 
+   server_node_id(0), server_port_num(0), client_node_id(0),
+   client_port_num(0), client_state(0), next_seq_num(0), head(nullptr),
+   unsent(nullptr), tail(nullptr) {}
 };
 
 void SrtClientInit(int conn);
