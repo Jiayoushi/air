@@ -7,9 +7,11 @@ find_package(Threads REQUIRED)
 include_directories(lib)
 add_executable(air_client
 			   src/client/app_client.cc
-               src/client/srt_client.cc)
+               src/client/srt_client.cc
+               src/common/seg.cc)
 add_executable(air_server
                src/server/app_server.cc
-               src/server/srt_server.cc)
+               src/server/srt_server.cc
+               src/common/seg.cc)
 target_link_libraries(air_client Threads::Threads)
 target_link_libraries(air_server Threads::Threads)

@@ -12,6 +12,8 @@
 #define kConnected  2
 #define kFinWait    3
 
+#define kSynMaxRetry 3
+
 // Store segments in send buffer linked list
 struct SegmentBuffer {
   Segment segment;
@@ -28,7 +30,7 @@ struct ClientTcb {
   unsigned int client_node_id;
   unsigned int client_port_num;
 
-  unsigned int client_state;
+  unsigned int state;
   unsigned int next_seq_num;               // Next sequence number to be used by
                                            // new segment
   
@@ -41,7 +43,7 @@ struct ClientTcb {
 
   ClientTcb(): 
    server_node_id(0), server_port_num(0), client_node_id(0),
-   client_port_num(0), client_state(0), next_seq_num(0), head(nullptr),
+   client_port_num(0), state(kClosed), next_seq_num(0), head(nullptr),
    unsent(nullptr), tail(nullptr) {}
 };
 

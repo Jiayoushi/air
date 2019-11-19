@@ -6,11 +6,13 @@
 #include <sys/socket.h>
 #include <iostream>
 
-#define kWaitForFirstStartControl    0
-#define kFirstStartControlReceived   1
-#define kSecondStartControlReceived  2
-#define kFirstEndControlReceived     3
-#define kSecondEndControlReceived    4
+#define kWaitFirstStart       0
+#define kWaitSecondStart      1
+#define kWaitFirstEnd         2
+#define kWaitSecondEnd        3
+
+#define kSegmentLost          0
+#define kSegmentNotLost       1
 
 int SnpSendSegment(int connection, const Segment &seg) {
   const char *seg_start = "!&";
@@ -21,7 +23,7 @@ int SnpSendSegment(int connection, const Segment &seg) {
     return kFailure;
   }
 
-  if (send(connection, seg, sizeof(Segment), 0) < 0) {
+  if (send(connection, &seg, sizeof(Segment), 0) < 0) {
     perror("SnpSendSegment failed to send segment");
     return kFailure;
   }
@@ -64,7 +66,7 @@ int SnpRecvSegment(int connection, Segment &seg) {
         buf[idx++] = c;
         // "!#" is received, the segment receiving is complete
         if (c == '#') {
-          if (SegmentLost() == kSegmentLost) {
+          if (SegmentLost(seg) == kSegmentLost) {
             state = kWaitFirstStart;
             idx = 0;
             continue;
@@ -91,7 +93,7 @@ int SnpRecvSegment(int connection, Segment &seg) {
 /*
   Artificial segment lost and invalid checksum
 */
-int SegmentLost(const Segment &seg) {
+int SegmentLost(Segment &seg) {
   int random = rand() % 100;
   if (random < kPacketLossRate * 100) {
     // 50% chance of losing a segment

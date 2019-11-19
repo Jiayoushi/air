@@ -17,7 +17,4 @@
 #define kFailure 						-1
 #define kSuccess  						0
 
-#define kSegmentNotLost					0
-#define kSegmentLost					1
-
 #endif

@@ -39,7 +39,7 @@ int SnpSendSegment(int connection, const Segment &seg);
 
 int SnpRecvSegment(int connection, const Segment &seg);
 
-int SegmentLost(const Segment &seg);
+int SegmentLost(Segment &seg);
 
 unsigned short Checksum(const Segment &seg);
 

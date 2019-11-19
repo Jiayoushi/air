@@ -19,7 +19,7 @@ struct ServerTcb {
   unsigned int client_node_id;
   unsigned int client_port_num;
 
-  unsigned int server_state;
+  unsigned int state;
   unsigned int expect_seq_num;
   
   std::mutex buffer_lock;
@@ -27,7 +27,7 @@ struct ServerTcb {
   unsigned int buffer_size;  // Size of the received data in received buffer
 
   ServerTcb(): server_node_id(0), server_port_num(0), client_node_id(0),
-    client_port_num(0), server_state(0), expect_seq_num(0),
+    client_port_num(0), state(kClosed), expect_seq_num(0),
     recv_buffer(nullptr), buffer_size(0) {}
 };
 

@@ -6,7 +6,6 @@
 #define kMaxConnection 1024
 
 static int overlay_conn;
-
 static std::vector<std::shared_ptr<ServerTcb>> table(kMaxConnection, nullptr);
 
 void SrtServerInit(int conn) {
@@ -19,8 +18,7 @@ int SrtServerSock(unsigned int port) {
       table[i] = std::make_shared<ServerTcb>();                                       
       return i;
     }
-  }                                        
-                                                                                      
+  }
   return -1; 
 }
 
