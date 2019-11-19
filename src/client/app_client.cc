@@ -18,15 +18,43 @@
 #define kClientPort2  89
 #define kServerPort2  90
 
+const char *hostname = "127.0.0.1";
+unsigned int hostport = 8080;
+
 // After the connections are created, wait for 5 seconds and then close it
 #define kWaitTime      5
 
 int OverlayStart() {
-  return 0;
+  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (sockfd < 0) {
+    perror("Error: cannot create socket");
+    exit(kFailure);
+  }
+  
+  struct hostent *server;
+  server = gethostbyname(hostname);
+  if (server == NULL) {
+    perror("Error: gethostbyname failed");
+    exit(kFailure);
+  }
+
+  struct sockaddr_in server_addr;
+  bzero((char *)&server_addr, sizeof(server_addr));
+  server_addr.sin_family = AF_INET;
+  bcopy((char *)server->h_addr,
+        (char *)&server_addr.sin_addr.s_addr, server->h_length);
+  server_addr.sin_port = htons(hostport);
+  
+  if (connect(sockfd, (const struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+    std::cerr << "Error: connect failed" << std::endl;
+    exit(kFailure);
+  }
+  
+  return sockfd;
 }
 
 void OverlayStop(int conn) {
-
+  close(conn);
 }
 
 int main() {
