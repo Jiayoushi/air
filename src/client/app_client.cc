@@ -115,6 +115,8 @@ int main() {
     exit(EXIT_FAILURE);
   }
 
+  SrtClientShutdown();
+
   OverlayStop(overlay_conn);
 
   return 0;
