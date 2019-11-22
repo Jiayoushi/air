@@ -13,7 +13,7 @@
 #include <list>
 
 #include "../common/seg.h"
-
+#include "../common/timer.h"
 
 // Client States
 #define kClosed     0
@@ -104,11 +104,6 @@ static std::shared_ptr<Segment> CreateSynSegment(
   syn->header.checksum = Checksum(syn);
 
   return syn;
-}
-
-std::chrono::milliseconds GetCurrentTime() {
-  return std::chrono::duration_cast<std::chrono::milliseconds>
-            (std::chrono::system_clock::now().time_since_epoch());
 }
 
 // Send SYN and waits for SYN_ACK
