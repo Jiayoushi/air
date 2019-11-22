@@ -6,7 +6,7 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 include_directories(lib)
 add_executable(air_client
-			   src/client/app_client.cc
+               src/client/app_client.cc
                src/client/srt_client.cc
                src/common/seg.cc
                src/common/timer.cc)
