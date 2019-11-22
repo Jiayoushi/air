@@ -1,6 +1,8 @@
 #ifndef AIR_SEG_H_
 #define AIR_SEG_H_
 
+#include <memory>
+
 #include "constants.h"
 
 enum SegmentType {
@@ -35,14 +37,14 @@ struct Segment {
 
   Return -1 on error, 0 on success.
 */
-int SnpSendSegment(int connection, const Segment &seg);
+int SnpSendSegment(int connection, std::shared_ptr<Segment> seg);
 
-int SnpRecvSegment(int connection, const Segment &seg);
+std::shared_ptr<Segment> SnpRecvSegment(int connection);
 
-int SegmentLost(Segment &seg);
+int SegmentLost(std::shared_ptr<Segment> seg);
 
-unsigned short Checksum(const Segment &seg);
+unsigned short Checksum(std::shared_ptr<Segment> seg);
 
-int CheckCheckSum(const Segment &seg);
+int CheckCheckSum(std::shared_ptr<Segment> seg);
 
 #endif

@@ -1,18 +1,24 @@
 #include "srt_client.h"
 
 #include <stdlib.h>
+#include <thread>
+#include <iostream>
 #include <memory>
+#include <atomic>
 #include <vector>
+#include <chrono>
 
 #define kMaxConnection 1024
+
+const static std::chrono::duration<double, std::milli> kTimeoutsSleepTime(500);
 
 static int overlay_conn;
 
 static std::vector<std::shared_ptr<ClientTcb>> table(kMaxConnection, nullptr);
 
-void SrtClientInit(int conn) {
-  overlay_conn = conn;
-}
+std::atomic<bool> running;
+static std::shared_ptr<std::thread> main_thread;
+static std::shared_ptr<std::thread> timer_thread;
 
 int SrtClientSock(unsigned int client_port) {
   for (int i = 0; i < kMaxConnection; ++i) {
@@ -23,50 +29,59 @@ int SrtClientSock(unsigned int client_port) {
     }
   }
 
-  return -1;
+  return kFailure;
 }
 
-int SrtClientClose(int sockfd) {
-  table[sockfd] = nullptr;
-  return kSuccess;
-}
+static std::shared_ptr<Segment> CreateSynSegment(
+  std::shared_ptr<ClientTcb> tcb, unsigned int server_port) {
+  std::shared_ptr<Segment> syn = std::make_shared<Segment>();
 
-static void CreateSynSegment(std::shared_ptr<ClientTcb> tcb, 
-  Segment &syn, unsigned int server_port) {
-  syn.header.src_port = tcb->client_port_num;
-  syn.header.dest_port = server_port;
-  syn.header.seq_num = rand() % std::numeric_limits<unsigned int>::max();
-  syn.header.ack_num = syn.header.seq_num + 1;
-  syn.header.length = sizeof(Segment);
-  syn.header.type = kSyn;
-  syn.header.rcv_win = 0;  // Not used
-  syn.header.checksum = Checksum(syn);
+  syn->header.src_port = tcb->client_port_num;
+  syn->header.dest_port = server_port;
+  syn->header.seq_num = rand() % std::numeric_limits<unsigned int>::max();
+  syn->header.ack_num = syn->header.seq_num + 1;
+  syn->header.length = sizeof(Segment);
+  syn->header.type = kSyn;
+  syn->header.rcv_win = 0;  // Not used
+  syn->header.checksum = Checksum(syn);
+
+  return syn;
 }
 
 // Send SYN and waits for SYN_ACK
 int SrtClientConnect(int sockfd, unsigned int server_port) {
   std::shared_ptr<ClientTcb> tcb = table[sockfd];
   if (tcb->state != kClosed) {
-    return -1;
+    return kFailure;
   }
 
-  Segment syn;
-  CreateSynSegment(tcb, syn, server_port);
-  while (tcb->state != kConnected) {
+  std::shared_ptr<Segment> syn = CreateSynSegment(tcb, server_port);
+  while (true) {
     switch (tcb->state) {
       case kClosed:
-        tcb->next_seq_num = syn.header.seq_num + 1;
+        tcb->next_seq_num = syn->header.seq_num + 1;
         tcb->unacked = 1;
         tcb->state = kSynSent;
-        SnpSendSegment(sockfd, syn);
-      case kSynSent:
 
+        SnpSendSegment(sockfd, syn);
+        break;
+      case kSynSent:
+        if (tcb->unacked == kSynMaxRetry) {
+          tcb->state = kClosed;
+          return kFailure;
+        }
+      case kConnected:
+          std::cerr << "Error: sockfd already connected" << std::endl;
+          return kFailure;
+      case kFinWait:
+          std::cerr << "Error: sockfd already connected" << std::endl;
+          return kFailure;
       default:
         break;
     }
   }
 
-  return kSuccess;
+  return kFailure;
 }
 
 int SrtClientDisconnect(int sockfd) {
@@ -77,9 +92,52 @@ int SrtClientSend(int sockfd, void *data, unsigned int length) {
   return 0;
 }
 
-void *SegmentHandler(void *arg) {
-  return 0;
+static void NotifyShutdown() {
+  running = false;
 }
-void *SendBufferTimer(void *client_tcb) {
-  return 0;
+
+static void HandleSegment(std::shared_ptr<Segment> seg) {
+
 }
+
+// Handles all incoming segments
+static void MainThread() {
+  while (running) {
+    std::shared_ptr<Segment> seg = SnpRecvSegment(overlay_conn);
+
+    HandleSegment(seg);
+  }
+}
+
+// Periodically called by Timer thread to check timeouts
+static void Timeouts() {
+
+}
+
+static void TimerThread() {
+  while (running) {
+    Timeouts();
+
+    // Go to sleep
+    std::this_thread::sleep_for(kTimeoutsSleepTime);
+  }
+}
+
+void SrtClientInit(int conn) {
+  overlay_conn = conn;
+  running = true;
+  main_thread = std::make_shared<std::thread>(MainThread);
+  timer_thread = std::make_shared<std::thread>(Timeouts);
+}
+
+int SrtClientClose(int sockfd) {
+  NotifyShutdown();
+
+  timer_thread->join();
+  main_thread->join();
+  table[sockfd] = nullptr;
+
+  return kSuccess;
+}
+
+

@@ -42,9 +42,9 @@ struct ClientTcb {
   unsigned int unacked;  // Number of sent-but-not-Acked segments
 
   ClientTcb(): 
-   server_node_id(0), server_port_num(0), client_node_id(0),
-   client_port_num(0), state(kClosed), next_seq_num(0), head(nullptr),
-   unsent(nullptr), tail(nullptr) {}
+    server_node_id(0), server_port_num(0), client_node_id(0),
+    client_port_num(0), state(kClosed), next_seq_num(0), head(nullptr),
+    unsent(nullptr), tail(nullptr) {}
 };
 
 void SrtClientInit(int conn);
@@ -55,8 +55,5 @@ int SrtClientSend(int sockfd, void *data, unsigned int length);
 
 int SrtClientDisconnect(int sockfd);
 int SrtClientClose(int sockfd);
-
-void *SegmentHandler(void *arg);
-void *SendBufferTimer(void *client_tcb);
 
 #endif

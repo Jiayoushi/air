@@ -14,7 +14,7 @@
 #define kSegmentLost          0
 #define kSegmentNotLost       1
 
-int SnpSendSegment(int connection, const Segment &seg) {
+int SnpSendSegment(int connection, std::shared_ptr<Segment> seg) {
   const char *seg_start = "!&";
   const char *seg_end = "!#";
 
@@ -23,7 +23,7 @@ int SnpSendSegment(int connection, const Segment &seg) {
     return kFailure;
   }
 
-  if (send(connection, &seg, sizeof(Segment), 0) < 0) {
+  if (send(connection, seg.get(), sizeof(Segment), 0) < 0) {
     perror("SnpSendSegment failed to send segment");
     return kFailure;
   }
@@ -36,7 +36,7 @@ int SnpSendSegment(int connection, const Segment &seg) {
   return kSuccess;
 }
 
-int SnpRecvSegment(int connection, Segment &seg) {
+std::shared_ptr<Segment> SnpRecvSegment(int connection) {
   char buf[sizeof(Segment) + 2];
   int idx = 0;
 
@@ -66,13 +66,16 @@ int SnpRecvSegment(int connection, Segment &seg) {
         buf[idx++] = c;
         // "!#" is received, the segment receiving is complete
         if (c == '#') {
+          std::shared_ptr<Segment> seg = std::make_shared<Segment>();
+          memcpy(seg.get(), buf, sizeof(Segment));
+
           if (SegmentLost(seg) == kSegmentLost) {
             state = kWaitFirstStart;
             idx = 0;
             continue;
           }
-          memcpy(&seg, buf, sizeof(Segment));
-          return kSuccess;
+
+          return seg;
         } else if (c == '!') {
           // Previous '!' is not end control character
           // This one might be, so still wait for '#'
@@ -87,13 +90,13 @@ int SnpRecvSegment(int connection, Segment &seg) {
     }   
   }
 
-  return kFailure;
+  return nullptr;
 }
 
 /*
   Artificial segment lost and invalid checksum
 */
-int SegmentLost(Segment &seg) {
+int SegmentLost(std::shared_ptr<Segment> seg) {
   int random = rand() % 100;
   if (random < kPacketLossRate * 100) {
     // 50% chance of losing a segment
@@ -102,13 +105,13 @@ int SegmentLost(Segment &seg) {
     // 50% chance of invalid checksum
     } else {
       // Start of the data
-      int data_len = sizeof(Segment) + seg.header.length;
+      int data_len = sizeof(Segment) + seg->header.length;
 
       // Random error bit
       int error_bit = rand() % (data_len * 8);
 
       // Flip the error bit
-      char *p = seg.data + error_bit / 8;
+      char *p = seg->data + error_bit / 8;
       *p ^= 1 << (error_bit % 8);
 
 	  return kSegmentNotLost;
@@ -119,11 +122,11 @@ int SegmentLost(Segment &seg) {
 }
 
 // TODO
-unsigned short Checksum(const Segment &seg) {
+unsigned short Checksum(std::shared_ptr<Segment> seg) {
   return 0;
 }
 
 // TODO
-int CheckCheckSum(const Segment &seg) {
+int CheckCheckSum(std::shared_ptr<Segment> seg) {
   return 0;
 }
