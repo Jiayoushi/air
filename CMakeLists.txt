@@ -15,5 +15,7 @@ add_executable(air_server
                src/server/srt_server.cc
                src/common/seg.cc
                src/common/timer.cc)
+target_compile_options(air_client PRIVATE -Wall)
+target_compile_options(air_server PRIVATE -Wall)
 target_link_libraries(air_client Threads::Threads)
 target_link_libraries(air_server Threads::Threads)

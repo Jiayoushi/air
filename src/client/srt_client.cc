@@ -14,6 +14,7 @@
 
 #include "../common/seg.h"
 #include "../common/timer.h"
+#include "../common/blocking_queue.h"
 
 // Client States
 #define kClosed     0
@@ -48,16 +49,17 @@ struct ClientTcb {
   
   // [unacked][unsent]
   std::mutex send_lock;
-  SendBufferIter unsent;  // First unsent segment
   SendBuffer send_buffer;
+  SendBufferIter unsent;  // First unsent segment
 
-  std::mutex recv_lock;
-  std::list<std::shared_ptr<Segment>> recv_buffer;
+  BlockingQueue<Segment> recv_buffer;
 
   ClientTcb(): 
     server_node_id(0), server_port_num(0), client_node_id(0),
-    client_port_num(0), state(kClosed), next_seq_num(0), send_buffer(),
-    unsent(send_buffer.end()) {}
+    client_port_num(0), state(kClosed), next_seq_num(0),
+    send_lock(), send_buffer(), unsent(send_buffer.end()),
+    recv_buffer() {
+  }
 };
 
 
@@ -129,6 +131,7 @@ int SrtClientConnect(int sockfd, unsigned int server_port) {
           tcb->state = kClosed;
           return kFailure;
         }
+        break;
       case kConnected:
           std::cerr << "Error: sockfd already connected" << std::endl;
           return kFailure;
@@ -140,6 +143,7 @@ int SrtClientConnect(int sockfd, unsigned int server_port) {
     }
 
     // Wait here for a segment
+    std::shared_ptr<Segment> recved_seg = tcb->recv_buffer.Pop();
   }
 
   return kFailure;
@@ -198,9 +202,15 @@ static void SendThread() {
   }
 }
 
+static unsigned int DemultiplexSegment(std::shared_ptr<Segment> seg) {
+  return 1;
+}
+
 static void Dispatch(std::shared_ptr<Segment> seg) {
+  // Demultiplexing
 
-
+  unsigned int recv_tcb_id = DemultiplexSegment(seg);
+  table[recv_tcb_id]->recv_buffer.Push(std::move(*seg));
 }
 
 static void RecvThread() {
