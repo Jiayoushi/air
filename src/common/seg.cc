@@ -6,6 +6,8 @@
 #include <sys/socket.h>
 #include <iostream>
 
+#include "../common/common.h"
+
 #define kWaitFirstStart       0
 #define kWaitSecondStart      1
 #define kWaitFirstEnd         2
@@ -15,6 +17,8 @@
 #define kSegmentNotLost       1
 
 int SnpSendSegment(int connection, std::shared_ptr<Segment> seg) {
+  assert(seg != nullptr);
+
   const char *seg_start = "!&";
   const char *seg_end = "!#";
 
@@ -87,7 +91,12 @@ std::shared_ptr<Segment> SnpRecvSegment(int connection) {
         break;
       default:
         break;
-    }   
+    }
+  }
+
+  if (recved < 0) {
+    perror("Error: recv");
+    exit(kFailure);
   }
 
   return nullptr;

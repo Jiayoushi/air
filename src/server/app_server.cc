@@ -14,12 +14,12 @@
 #include "../common/constants.h"
 #include "srt_server.h"
 
-#define kClientPort1 87
-#define kServerPort1 88
-#define kClientPort2 90
-#define kServerPort2 90
+#define kClientPort1 8000
+#define kServerPort1 8001
+#define kClientPort2 8002
+#define kServerPort2 8003
 
-#define kWaitTime    10
+#define kWaitTime    3
 
 const char *hostname = "127.0.0.1";
 unsigned int hostport = 8080;
@@ -58,7 +58,14 @@ int OverlayStart() {
     exit(kFailure);
   }
 
-  return sockfd;
+  socklen_t size = sizeof(server_addr);
+  int overlay_fd = 0;
+  if ((overlay_fd = accept(sockfd, (struct sockaddr *)&server_addr, &size)) < 0) {
+    perror("Error: conncet");
+    exit(kFailure);
+  }
+
+  return overlay_fd;
 }
 
 void OverlayStop(int conn) {
@@ -76,41 +83,51 @@ int main() {
   }
 
   SrtServerInit(overlay_conn);
-
-
+  std::cerr << "Server Init success" << std::endl;
 
   // Open 1
   int sockfd = SrtServerSock(kServerPort1);
   if (sockfd < 0) {
-    std::cerr << "can't create srt socket" << std::endl;
+    std::cerr << "can't create srt socket1" << std::endl;
     exit(EXIT_FAILURE);
   }
+  std::cerr << "socket created: " << sockfd << std::endl;
+
   SrtServerAccept(sockfd);
+  std::cerr << "Accept #1 succeed" << std::endl;
 
   // Open 2
   int sockfd2 = SrtServerSock(kServerPort2);
   if (sockfd2 < 0) {
-    std::cerr << "can't create srt socket" << std::endl;
+    std::cerr << "can't create srt socket2" << std::endl;
     exit(EXIT_FAILURE);
   }
   SrtServerAccept(sockfd2);
+  std::cerr << "Accept #1 succeed" << std::endl;
 
   // Sleep
   sleep(kWaitTime);
 
+  std::cerr << "Attempt to close connecion #1" << std::endl;
   // Close 1
   if (SrtServerClose(sockfd) < 0) {
     std::cerr << "can't destroy srt socket" << std::endl;
     exit(EXIT_FAILURE);
   }
+  std::cerr << "Connection #1 closed" << std::endl;
 
   // Close 2
   if (SrtServerClose(sockfd2) < 0) {
     std::cerr << "can't destroy srt socket" << std::endl;
     exit(EXIT_FAILURE);
   }
+  std::cerr << "Connection #2 closed" << std::endl;
+
+  SrtServerShutdown();
+  std::cerr << "shutdown " << std::endl;
 
   OverlayStop(overlay_conn);
+  std::cerr << "overlay stop" << std::endl;
 
   return 0;
 }

@@ -13,16 +13,16 @@
 #include "../common/constants.h"
 #include "srt_client.h"
 
-#define kClientPort1  87
-#define kServerPort1  88
-#define kClientPort2  89
-#define kServerPort2  90
+#define kClientPort1  8000
+#define kServerPort1  8001
+#define kClientPort2  8002
+#define kServerPort2  8003
 
 const char *hostname = "127.0.0.1";
 unsigned int hostport = 8080;
 
 // After the connections are created, wait for 5 seconds and then close it
-#define kWaitTime      5
+#define kWaitTime      1
 
 int OverlayStart() {
   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -67,6 +67,7 @@ int main() {
   }
 
   SrtClientInit(overlay_conn);
+  std::cerr << "Client init success" << std::endl;
 
   // First connection
   int sockfd = SrtClientSock(kClientPort1);
@@ -74,6 +75,8 @@ int main() {
     std::cerr << "Failed to create srt client sock" << std::endl;
     exit(kFailure);
   }
+  std::cerr << "socket created: " << sockfd << std::endl;
+
   if (SrtClientConnect(sockfd, kServerPort1) < 0) {
     std::cerr << "Failed to connect to srt server" << std::endl;
     exit(kFailure);
@@ -86,6 +89,7 @@ int main() {
     std::cerr << "Failed to create srt client sock" << std::endl;
     exit(kFailure);
   }
+
   if (SrtClientConnect(sockfd2, kServerPort2) < 0) {
     std::cerr << "Failed to connect to srt server" << std::endl;
     exit(kFailure);
@@ -95,29 +99,40 @@ int main() {
   // Sleep
   sleep(kWaitTime);
 
+  std::cerr << "Attempt to close sockfd #1 " << std::endl;
   // Close first connection
   if (SrtClientDisconnect(sockfd)<0) {
     std::cerr << "Failed to disconnect from srt server" << std::endl;
     exit(EXIT_FAILURE);
   }
+  std::cerr << "connection #1 closed " << std::endl;
+
+  // Close second connection
   if (SrtClientClose(sockfd)<0) {
     std::cerr << "Failed to close srt client" << std::endl;
     exit(EXIT_FAILURE);
   }
+  std::cerr << "connection #1 socket closed " << std::endl;
 
   // Close second connection
   if (SrtClientDisconnect(sockfd2)<0) {
     std::cerr << "Failed to disconnect from srt server" << std::endl;
     exit(EXIT_FAILURE);
   }
+  std::cerr << "connection #2 closed" << std::endl;
+
   if (SrtClientClose(sockfd2) < 0) {
     std::cerr << "Failed to close srt client" << std::endl;
     exit(EXIT_FAILURE);
   }
+  std::cerr << "connection #2 socket closed" << std::endl;
 
   SrtClientShutdown();
+  std::cerr << "shutdown " << std::endl;
+
 
   OverlayStop(overlay_conn);
+  std::cerr << "overlay stop" << std::endl;
 
   return 0;
 }

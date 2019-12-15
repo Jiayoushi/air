@@ -16,6 +16,7 @@
 #include "../common/seg.h"
 #include "../common/timer.h"
 #include "../common/blocking_queue.h"
+#include "../common/common.h"
 
 // Client States
 #define kClosed          0
@@ -130,7 +131,7 @@ const static std::chrono::milliseconds kSynTimeout(6000);   // 6 seconds
 int SrtClientSock(unsigned int client_port) {
   tcb_table_lock.lock();
   for (int i = 0; i < kMaxConnection; ++i) {
-    if (tcb_table[i] != nullptr) {
+    if (tcb_table[i] == nullptr) {
       tcb_table[i] = std::make_shared<ClientTcb>();
       tcb_table[i]->client_port = client_port;
       tcb_table_lock.unlock();
@@ -250,7 +251,7 @@ static std::shared_ptr<ClientTcb> Demultiplex(std::shared_ptr<Segment> seg) {
   return nullptr;
 }
 
-static void input(std::shared_ptr<Segment> seg) {
+static void Input(std::shared_ptr<Segment> seg) {
   std::shared_ptr<ClientTcb> tcb = Demultiplex(seg);
   if (tcb == nullptr)
     return;
@@ -298,7 +299,12 @@ static void InputFromIp() {
   while (running) {
     std::shared_ptr<Segment> seg = SnpRecvSegment(overlay_conn);
 
-    input(seg);
+    if (seg == nullptr) {
+      perror("Error: SnpRecvSegment");
+      exit(kFailure);
+    }
+    
+    Input(seg);
   }
 }
 
@@ -306,8 +312,8 @@ static void InputFromIp() {
 
 void SrtClientInit(int conn) {
   overlay_conn = conn;
-  running = true;
 
+  running = true;
   input_thread = std::make_shared<std::thread>(InputFromIp);
   timeout_thread = std::make_shared<std::thread>(Timeout);
 }
@@ -329,7 +335,9 @@ void SrtClientShutdown() {
   NotifyShutdown();
 
   timeout_thread->join();
+  CDEBUG << "timeout thread exists" << std::endl;
   input_thread->join();
+  CDEBUG << "input thread exists" << std::endl;
 }
 
 int SrtClientDisconnect(int sockfd) {

@@ -1,6 +1,8 @@
 #ifndef AIR_CONSTANTS_H_
 #define AIR_CONSTANTS_H_
 
+// A lot of them not used
+
 #define MAX_TRANSPORT_CONNECTIONS		10
 #define kPort							9008
 #define MAX_SEG_LEN  					1500

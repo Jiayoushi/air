@@ -6,6 +6,8 @@
 #include <atomic>
 #include <condition_variable>
 
+#include "../common/common.h"
+
 #define kClosed        1
 #define kListening     2
 #define kConnected     3
@@ -55,6 +57,10 @@ std::shared_ptr<std::thread> input_thread;
 // TODO
 std::shared_ptr<ServerTcb> Demultiplex(std::shared_ptr<Segment> seg) {
   for (int tcb_id = 0; tcb_id < kMaxConnection; ++tcb_id) {
+    if (tcb_table[tcb_id] == nullptr)
+      continue;
+
+    SDEBUG << "CHECK id " << tcb_id << std::endl;
     if ((seg->header.type == kSyn && seg->header.dest_port == tcb_table[tcb_id]->server_port) ||
         (seg->header.src_port == tcb_table[tcb_id]->client_port && seg->header.dest_port == tcb_table[tcb_id]->server_port))
     return tcb_table[tcb_id];
@@ -76,7 +82,7 @@ static std::shared_ptr<Segment> CreateSynAck(std::shared_ptr<ServerTcb> tcb, std
   seg->header.rcv_win = 0;
   seg->header.checksum = Checksum(seg);
 
-  return nullptr;
+  return seg;
 }
 
 static void SendSegment(std::shared_ptr<ServerTcb> tcb, enum SegmentType type, std::shared_ptr<Segment> input_seg) {
@@ -87,13 +93,14 @@ static void SendSegment(std::shared_ptr<ServerTcb> tcb, enum SegmentType type, s
       seg = CreateSynAck(tcb, input_seg);
       break;
     default:
-      break;
+      SDEBUG << "SendSegment: unmatched segment type" << std::endl;
+      assert(false);
   }
   
   SnpSendSegment(overlay_conn, seg);
 }
 
-static int input(std::shared_ptr<Segment> seg) {
+static int Input(std::shared_ptr<Segment> seg) {
     std::shared_ptr<ServerTcb> tcb = Demultiplex(seg);
 
     switch (tcb->state) {
@@ -143,15 +150,21 @@ int SrtServerRecv(int sockfd, void *buffer, unsigned int length) {
 
 static void InputFromIp() {
   while (running) {
+    //SDEBUG << "waiting for an incoming segment" << std::endl;
     std::shared_ptr<Segment> seg = SnpRecvSegment(overlay_conn);
 
-    input(seg);
+    if (seg != nullptr) {
+      Input(seg);
+    } else {
+      // The whole IP stack is down
+      exit(kSuccess);
+    }
   }
 }
 
 int SrtServerSock(unsigned int server_port) {
-  for (int i = 0; i < kMaxConnection; ++i) {                                          
-    if (tcb_table[i] != nullptr) {
+  for (int i = 0; i < kMaxConnection; ++i) {
+    if (tcb_table[i] == nullptr) {
       tcb_table[i] = std::make_shared<ServerTcb>();
       tcb_table[i]->server_port = server_port;
       tcb_table[i]->state = kListening;    // Combine the 'bind' and 'sockfd' into one
@@ -169,6 +182,7 @@ int SrtServerClose(int sockfd) {
 
 void SrtServerInit(int conn) {
   overlay_conn = conn;
+  running = true;
 
   input_thread = std::make_shared<std::thread>(InputFromIp);
 }
