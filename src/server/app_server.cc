@@ -65,6 +65,7 @@ void OverlayStop(int conn) {
   close(conn);
 }
 
+
 int main() {
   srand(time(nullptr));
 
@@ -76,10 +77,12 @@ int main() {
 
   SrtServerInit(overlay_conn);
 
+
+
   // Open 1
   int sockfd = SrtServerSock(kServerPort1);
   if (sockfd < 0) {
-    std::cerr << "can't create srt server" << std::endl;
+    std::cerr << "can't create srt socket" << std::endl;
     exit(EXIT_FAILURE);
   }
   SrtServerAccept(sockfd);
@@ -87,7 +90,7 @@ int main() {
   // Open 2
   int sockfd2 = SrtServerSock(kServerPort2);
   if (sockfd2 < 0) {
-    std::cerr << "can't create srt server" << std::endl;
+    std::cerr << "can't create srt socket" << std::endl;
     exit(EXIT_FAILURE);
   }
   SrtServerAccept(sockfd2);
@@ -97,13 +100,13 @@ int main() {
 
   // Close 1
   if (SrtServerClose(sockfd) < 0) {
-    std::cerr << "can't destroy srt server" << std::endl;
+    std::cerr << "can't destroy srt socket" << std::endl;
     exit(EXIT_FAILURE);
   }
 
   // Close 2
   if (SrtServerClose(sockfd2) < 0) {
-    std::cerr << "can't destroy srt server" << std::endl;
+    std::cerr << "can't destroy srt socket" << std::endl;
     exit(EXIT_FAILURE);
   }
 
