@@ -61,6 +61,7 @@ struct ClientTcb {
 
   unsigned int state;
 
+  unsigned int initial_seq_num;
   
   unsigned int next_client_seq_num;
   unsigned int next_server_seq_num;
@@ -91,7 +92,8 @@ struct ClientTcb {
 
   ClientTcb(): 
     server_id(0), server_port(0), client_id(0), client_port(0), 
-    state(kClosed), next_client_seq_num(0), next_server_seq_num(0),
+    state(kClosed), initial_seq_num(rand() % std::numeric_limits<unsigned int>::max()),
+    next_client_seq_num(0), next_server_seq_num(0),
     lock(),  waiting(),
     syn_retry(0), send_buffer(), unsent(send_buffer.end()) {
     //recv_buffer() {
@@ -114,7 +116,7 @@ static std::shared_ptr<std::thread> timeout_thread;
 /*
  * A thread responsible for receiving segments from network stack
  */
-static std::shared_ptr<std::thread> recv_thread;
+static std::shared_ptr<std::thread> input_thread;
 
 
 // Time interval between checking timeouts.
@@ -139,33 +141,31 @@ int SrtClientSock(unsigned int client_port) {
   return -1;
 }
 
-static std::shared_ptr<Segment> CreateSynSegment(
-  std::shared_ptr<ClientTcb> tcb, 
-  unsigned int server_port) {
+static std::shared_ptr<Segment> CreateSynSegment(std::shared_ptr<ClientTcb> tcb) {
+  std::shared_ptr<Segment> seg = std::make_shared<Segment>();
 
-  std::shared_ptr<Segment> syn = std::make_shared<Segment>();
+  seg->header.src_port = tcb->client_port;
+  seg->header.dest_port = tcb->server_port;
+  seg->header.seq_num = tcb->initial_seq_num; 
+  seg->header.ack_num = 0;
+  seg->header.length = sizeof(Segment);
+  seg->header.type = kSyn;
+  seg->header.rcv_win = 0;
+  seg->header.checksum = Checksum(seg);
 
-  syn->header.src_port = tcb->client_port;
-  syn->header.dest_port = server_port;
-  syn->header.seq_num = rand() % std::numeric_limits<unsigned int>::max();
-  syn->header.ack_num = 0; // TODO: this ack_num should not matter, right?
-  syn->header.length = sizeof(Segment);
-  syn->header.type = kSyn;
-  syn->header.rcv_win = 0;  // TODO
-  syn->header.checksum = Checksum(syn);
-
-  return syn;
+  return seg;
 }
 
 
 // Establish connection
 int SrtClientConnect(int sockfd, unsigned int server_port) {
   std::shared_ptr<ClientTcb> tcb = tcb_table[sockfd];
+  tcb->server_port = server_port;
 
   if (tcb->state != kClosed)
     return kFailure;
 
-  std::shared_ptr<Segment> syn = CreateSynSegment(tcb, server_port);
+  std::shared_ptr<Segment> syn = CreateSynSegment(tcb);
 
   tcb->next_client_seq_num = syn->header.seq_num + 1;
   tcb->state = kSynSent;
@@ -194,6 +194,7 @@ static void ProcessTimeouts(std::shared_ptr<ClientTcb> tcb) {
   for (SendBuffer::iterator it = tcb->send_buffer.begin(); it != tcb->unsent; ++it) {
     SegmentBuffer &seg_buf = *it;
 
+    // TODO: or we can set it as 1, 2, 3, 4... units of time, measured by timeout unit
     if (GetCurrentTime() - seg_buf.send_time > kSynTimeout) {
       if (tcb->syn_retry == kMaxSynRetry) {
         tcb->waiting.notify_one();
@@ -293,7 +294,7 @@ static void input(std::shared_ptr<Segment> seg) {
   }
 }
 
-static void Recv() {
+static void InputFromIp() {
   while (running) {
     std::shared_ptr<Segment> seg = SnpRecvSegment(overlay_conn);
 
@@ -307,7 +308,7 @@ void SrtClientInit(int conn) {
   overlay_conn = conn;
   running = true;
 
-  recv_thread = std::make_shared<std::thread>(Recv);
+  input_thread = std::make_shared<std::thread>(InputFromIp);
   timeout_thread = std::make_shared<std::thread>(Timeout);
 }
 
@@ -328,7 +329,7 @@ void SrtClientShutdown() {
   NotifyShutdown();
 
   timeout_thread->join();
-  recv_thread->join();
+  input_thread->join();
 }
 
 int SrtClientDisconnect(int sockfd) {

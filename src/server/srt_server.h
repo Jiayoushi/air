@@ -8,6 +8,7 @@
 
 
 void SrtServerInit(int conn);
+void SrtServerShutdown();
 
 int SrtServerSock(unsigned int server_port);
 
@@ -16,7 +17,5 @@ int SrtServerAccept(int sockfd);
 int SrtServerRecv(int sockfd, void *buffer, unsigned int length);
 
 int SrtServerClose(int sockfd);
-
-void *SegmentHandler(void *arg);
 
 #endif

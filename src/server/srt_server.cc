@@ -3,6 +3,7 @@
 #include <iostream>
 #include <memory>
 #include <vector>
+#include <atomic>
 #include <condition_variable>
 
 #define kClosed        1
@@ -24,8 +25,10 @@ struct ServerTcb {
   unsigned int client_port;
 
   unsigned int state;
+
   unsigned int expect_seq_num;
-  
+  unsigned int initial_seq_num;
+
   std::mutex lock;
 
   std::condition_variable waiting;
@@ -34,17 +37,60 @@ struct ServerTcb {
   unsigned int buffer_size;  // Size of the received data in received buffer
 
   ServerTcb(): server_id(0), server_port(0), client_id(0),
-    client_port(0), state(kClosed), expect_seq_num(0), lock(),
-    recv_buffer(nullptr), buffer_size(0) {}
+    client_port(0), state(kClosed), expect_seq_num(0),
+    initial_seq_num(rand() % std::numeric_limits<unsigned int>::max()),
+    lock(), recv_buffer(nullptr), buffer_size(0) {}
 };
 
-
+std::mutex table_lock;
 static std::vector<std::shared_ptr<ServerTcb>> tcb_table(kMaxConnection, nullptr);
+
+
+// A global variable control the running of all threads.
+std::atomic<bool> running;
+
+std::shared_ptr<std::thread> input_thread;
 
 
 // TODO
 std::shared_ptr<ServerTcb> Demultiplex(std::shared_ptr<Segment> seg) {
-  return tcb_table[0];
+  for (int tcb_id = 0; tcb_id < kMaxConnection; ++tcb_id) {
+    if ((seg->header.type == kSyn && seg->header.dest_port == tcb_table[tcb_id]->server_port) ||
+        (seg->header.src_port == tcb_table[tcb_id]->client_port && seg->header.dest_port == tcb_table[tcb_id]->server_port))
+    return tcb_table[tcb_id];
+  }
+
+  return nullptr;
+}
+
+
+static std::shared_ptr<Segment> CreateSynAck(std::shared_ptr<ServerTcb> tcb, std::shared_ptr<Segment> input_seg) {
+  std::shared_ptr<Segment> seg = std::make_shared<Segment>();
+
+  seg->header.src_port = tcb->server_port;
+  seg->header.dest_port = tcb->client_port;
+  seg->header.seq_num = tcb->initial_seq_num;
+  seg->header.ack_num = input_seg->header.seq_num + 1;
+  seg->header.length = sizeof(Segment);
+  seg->header.type = kSynAck;
+  seg->header.rcv_win = 0;
+  seg->header.checksum = Checksum(seg);
+
+  return nullptr;
+}
+
+static void SendSegment(std::shared_ptr<ServerTcb> tcb, enum SegmentType type, std::shared_ptr<Segment> input_seg) {
+  std::shared_ptr<Segment> seg;
+
+  switch (type) {
+    case kSynAck:
+      seg = CreateSynAck(tcb, input_seg);
+      break;
+    default:
+      break;
+  }
+  
+  SnpSendSegment(overlay_conn, seg);
 }
 
 static int input(std::shared_ptr<Segment> seg) {
@@ -56,6 +102,15 @@ static int input(std::shared_ptr<Segment> seg) {
         return kFailure;
 
       case kListening:
+        if (seg->header.type != kSyn)
+          return kFailure;
+
+        tcb->state = kConnected;
+        tcb->expect_seq_num = seg->header.seq_num + 1;
+        tcb->client_port = seg->header.src_port;
+        SendSegment(tcb, kSynAck, seg);
+        tcb->waiting.notify_one();
+
         return kSuccess;
 
       case kConnected:
@@ -66,20 +121,12 @@ static int input(std::shared_ptr<Segment> seg) {
     }
 }
 
-// TODO
-static std::shared_ptr<Segment> CreateSynAck(std::shared_ptr<ServerTcb> tcb) {
-  return nullptr;
-}
 
 int SrtServerAccept(int sockfd) {
   std::shared_ptr<ServerTcb> tcb = tcb_table[sockfd];
-
-  std::shared_ptr<Segment> syn_ack = CreateSynAck(tcb);
-
-  SnpSendSegment(overlay_conn, syn_ack);
   tcb->state = kListening;
 
-  // Blocked until input notify that the state is k
+  // Blocked until input notify that the state is connected
   std::unique_lock<std::mutex> lk(tcb->lock);
   tcb->waiting.wait(lk, 
     [&tcb] {
@@ -93,8 +140,13 @@ int SrtServerRecv(int sockfd, void *buffer, unsigned int length) {
   return 0;
 }
 
-void *SegmentHandler(void *arg) {
-  return 0;
+
+static void InputFromIp() {
+  while (running) {
+    std::shared_ptr<Segment> seg = SnpRecvSegment(overlay_conn);
+
+    input(seg);
+  }
 }
 
 int SrtServerSock(unsigned int server_port) {
@@ -117,4 +169,16 @@ int SrtServerClose(int sockfd) {
 
 void SrtServerInit(int conn) {
   overlay_conn = conn;
+
+  input_thread = std::make_shared<std::thread>(InputFromIp);
+}
+
+static void NotifyShutdown() {
+  running = false;
+}
+
+void SrtServerShutdown() {
+  NotifyShutdown();
+
+  input_thread->join();
 }
