@@ -27,6 +27,7 @@ struct SrtHeader {
 
 struct Segment {
   SrtHeader header;
+
   char data[MAX_SEG_LEN];
 };
 

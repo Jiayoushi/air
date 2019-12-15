@@ -13,10 +13,10 @@
 
 // Server transport control block.
 struct ServerTcb {
-  unsigned int server_node_id;
+  unsigned int server_id;
   unsigned int server_port_num;
 
-  unsigned int client_node_id;
+  unsigned int client_id;
   unsigned int client_port_num;
 
   unsigned int state;
@@ -26,7 +26,7 @@ struct ServerTcb {
   char *recv_buffer;  // Reciving buffer
   unsigned int buffer_size;  // Size of the received data in received buffer
 
-  ServerTcb(): server_node_id(0), server_port_num(0), client_node_id(0),
+  ServerTcb(): server_id(0), server_port_num(0), client_id(0),
     client_port_num(0), state(kClosed), expect_seq_num(0),
     recv_buffer(nullptr), buffer_size(0) {}
 };
