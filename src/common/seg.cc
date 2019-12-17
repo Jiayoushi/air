@@ -41,8 +41,11 @@ int SnpSendSegment(int connection, std::shared_ptr<Segment> seg) {
   return kSuccess;
 }
 
+
+char buf[65535];
 std::shared_ptr<Segment> SnpRecvSegment(int connection) {
-  char buf[sizeof(Segment) + 2];
+  memset(buf, 0, 65535);
+
   int idx = 0;
 
   int state = kWaitFirstStart;
@@ -72,7 +75,7 @@ std::shared_ptr<Segment> SnpRecvSegment(int connection) {
         // "!#" is received, the segment receiving is complete
         if (c == '#') {
           std::shared_ptr<Segment> seg = std::make_shared<Segment>();
-          memcpy(seg.get(), buf, sizeof(Segment));
+          memcpy(&seg.get()->header, buf, sizeof(SegmentHeader));
 
           if (SegmentLost(seg) == kSegmentLost) {
             state = kWaitFirstStart;
@@ -110,14 +113,14 @@ int SegmentLost(std::shared_ptr<Segment> seg) {
 
     // 50% chance of invalid checksum
     } else {
-      // Start of the data
-      int data_len = sizeof(Segment) + seg->header.length;
+      // TODO:
+      int len = sizeof(SegmentHeader) + seg->header.length;
 
       // Random error bit
-      int error_bit = rand() % (data_len * 8);
+      int error_bit = rand() % (len * 8);
 
-      // Flip the error bit
-      char *p = seg->data + error_bit / 8;
+      // Flip
+      char *p = (char *)seg.get() + error_bit / 8;
       *p ^= 1 << (error_bit % 8);
 
 	  return kSegmentNotLost;
@@ -128,14 +131,36 @@ int SegmentLost(std::shared_ptr<Segment> seg) {
 }
 
 // TODO
-unsigned short Checksum(std::shared_ptr<Segment> seg) {
-  return 0;
+unsigned short Checksum(std::shared_ptr<Segment> seg, unsigned int data_size) {
+  unsigned short old_checksum = seg->header.checksum;
+  seg->header.checksum = 0;
+
+  unsigned short *addr = (unsigned short *)seg.get();
+  unsigned int count = sizeof(SegmentHeader) + data_size;
+  
+  register long sum = 0;
+  
+  while (count > 1) {
+    sum += *addr++;
+    count -= 2;
+  }
+
+  if (count > 0)
+    sum += *addr++;
+
+  while (sum >> 16)
+    sum = (sum & 0xffff) + (sum >> 16);
+
+  seg->header.checksum = old_checksum;
+  return ~sum;
 }
 
 // TODO
-bool ValidChecksum(std::shared_ptr<Segment> seg) {
-  return true;
+bool ValidChecksum(std::shared_ptr<Segment> seg, unsigned int data_size) {
+  return Checksum(seg, data_size) == seg->header.checksum;
 }
+
+
 
 std::vector<std::string> type_strings = 
 {"SYN", "SYN_ACK", "FIN", "FIN_ACK", "DATA", "DATA_ACK"};
@@ -143,12 +168,12 @@ std::vector<std::string> type_strings =
 std::string SegToString(std::shared_ptr<Segment> seg) {
   std::stringstream ss;
 
-  SrtHeader &h = seg->header;
+  SegmentHeader &h = seg->header;
 
-  ss << "src_port=" << h.src_port << ", dest_port=" << h.dest_port
-     << ", seq_num=" << h.seq_num << ", ack_num=" << h.ack_num
-     << ", length=" << h.length << ", type=" << type_strings[h.type]
-     << ", recv_win=" << h.rcv_win << ", checksum=" << h.checksum;
+  ss << "src_port="   << h.src_port << ", dest_port=" << h.dest_port
+     << ", seq_num="  << h.seq_num  << ", ack_num="   << h.ack_num
+     << ", length="   << h.length   << ", type="      << type_strings[h.type]
+     << ", recv_win=" << h.rcv_win  << ", checksum="  << h.checksum;
 
   return ss.str();
 }

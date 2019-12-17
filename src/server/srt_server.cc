@@ -52,7 +52,7 @@ static std::vector<std::shared_ptr<ServerTcb>> tcb_table(kMaxConnection, nullptr
 
 
 // A global variable control the running of all threads.
-std::atomic<bool> running;
+static std::atomic<bool> running;
 
 std::shared_ptr<std::thread> input_thread;
 
@@ -82,7 +82,7 @@ static std::shared_ptr<Segment> CreateSynAck(std::shared_ptr<ServerTcb> tcb, std
   seg->header.length = sizeof(Segment);
   seg->header.type = kSynAck;
   seg->header.rcv_win = 0;
-  seg->header.checksum = Checksum(seg);
+  seg->header.checksum = Checksum(seg, 0);
 
   return seg;
 }
@@ -97,7 +97,7 @@ static std::shared_ptr<Segment> CreateFinAck(std::shared_ptr<ServerTcb> tcb, std
   seg->header.length = sizeof(Segment);
   seg->header.type = kFinAck;
   seg->header.rcv_win = 0;
-  seg->header.checksum = Checksum(seg);
+  seg->header.checksum = Checksum(seg, 0);
 
   return seg;
 }
@@ -123,8 +123,9 @@ static void SendSegment(std::shared_ptr<ServerTcb> tcb, enum SegmentType type,
 }
 
 static int Input(std::shared_ptr<Segment> seg) {
-  if (!ValidChecksum(seg))
+  if (!ValidChecksum(seg, 0)) {
     return kFailure;
+  }
 
   std::shared_ptr<ServerTcb> tcb = Demultiplex(seg);
   if (tcb == nullptr)

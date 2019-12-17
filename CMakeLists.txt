@@ -5,6 +5,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 include_directories(lib)
+
+add_library(air SHARED
+            src/client/srt_client.cc
+            src/server/srt_server.cc
+            src/common/seg.cc
+            src/common/timer.cc)
 add_executable(air_client
                src/client/app_client.cc
                src/client/srt_client.cc
@@ -15,6 +21,8 @@ add_executable(air_server
                src/server/srt_server.cc
                src/common/seg.cc
                src/common/timer.cc)
+add_executable(test
+               tests/test.cc)
 target_compile_options(air_client PRIVATE -Wall)
 target_compile_options(air_server PRIVATE -Wall)
 target_link_libraries(air_client Threads::Threads)

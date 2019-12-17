@@ -12,6 +12,7 @@
 
 #include "../common/constants.h"
 #include "srt_client.h"
+#include "srt_client_overlay.h"
 
 #define kClientPort1  8000
 #define kServerPort1  8001
@@ -24,48 +25,12 @@ unsigned int hostport = 8080;
 // After the connections are created, wait for 5 seconds and then close it
 #define kWaitTime      1
 
-int OverlayStart() {
-  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-  if (sockfd < 0) {
-    perror("Error: cannot create socket");
-    exit(kFailure);
-  }
-  
-  struct hostent *server;
-  server = gethostbyname(hostname);
-  if (server == NULL) {
-    perror("Error: gethostbyname failed");
-    exit(kFailure);
-  }
 
-  struct timeval tv;
-  tv.tv_sec = 1;
-  tv.tv_usec = 0;
-  setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
-
-  struct sockaddr_in server_addr;
-  bzero((char *)&server_addr, sizeof(server_addr));
-  server_addr.sin_family = AF_INET;
-  bcopy((char *)server->h_addr,
-        (char *)&server_addr.sin_addr.s_addr, server->h_length);
-  server_addr.sin_port = htons(hostport);
-  
-  if (connect(sockfd, (const struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-    std::cerr << "Error: connect failed" << std::endl;
-    exit(kFailure);
-  }
-  
-  return sockfd;
-}
-
-void OverlayStop(int conn) {
-  close(conn);
-}
 
 int main() {
   srand(time(nullptr));
 
-  int overlay_conn = OverlayStart();
+  int overlay_conn = OverlayClientStart(hostname, hostport);
   if (overlay_conn < 0) {
     std::cerr << "Failed to start overlay" << std::endl;
     exit(kFailure);
@@ -135,7 +100,7 @@ int main() {
   SrtClientShutdown();
   std::cerr << "shutdown " << std::endl;
 
-  OverlayStop(overlay_conn);
+  OverlayClientStop(overlay_conn);
   std::cerr << "overlay stop" << std::endl;
 
   return 0;

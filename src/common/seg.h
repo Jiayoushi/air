@@ -15,21 +15,21 @@ enum SegmentType {
   kDataAck
 };
 
-struct SrtHeader {
+struct SegmentHeader {
   unsigned int src_port;
   unsigned int dest_port;
   unsigned int seq_num;
   unsigned int ack_num;
-  unsigned short int length;
-  unsigned short int type;
-  unsigned short int rcv_win;
-  unsigned short int checksum;
+  unsigned short length;   // Header length
+  unsigned short type;
+  unsigned short rcv_win;
+  unsigned short checksum;
 };
 
 struct Segment {
-  SrtHeader header;
+  SegmentHeader header;
 
-  char data[MAX_SEG_LEN];
+  char *data = nullptr;
 };
 
 /*
@@ -45,9 +45,9 @@ std::shared_ptr<Segment> SnpRecvSegment(int connection);
 
 int SegmentLost(std::shared_ptr<Segment> seg);
 
-unsigned short Checksum(std::shared_ptr<Segment> seg);
+unsigned short Checksum(std::shared_ptr<Segment> seg, unsigned int data_size);
 
-bool ValidChecksum(std::shared_ptr<Segment> seg);
+bool ValidChecksum(std::shared_ptr<Segment> seg, unsigned int data_size);
 
 std::string SegToString(std::shared_ptr<Segment> seg);
 

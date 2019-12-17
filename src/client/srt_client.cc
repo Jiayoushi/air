@@ -116,7 +116,7 @@ void SendBufferPopFront(std::shared_ptr<ClientTcb> tcb) {
 
 
 // A global variable control the running of all threads.
-std::atomic<bool> running;
+static std::atomic<bool> running;
 
 std::mutex tcb_table_lock;
 static std::vector<std::shared_ptr<ClientTcb>> tcb_table(kMaxConnection, nullptr);
@@ -164,7 +164,7 @@ static std::shared_ptr<Segment> CreateSynSegment(std::shared_ptr<ClientTcb> tcb)
   seg->header.length = sizeof(Segment);
   seg->header.type = kSyn;
   seg->header.rcv_win = 0;
-  seg->header.checksum = Checksum(seg);
+  seg->header.checksum = Checksum(seg, 0);
 
   return seg;
 }
@@ -175,11 +175,11 @@ static std::shared_ptr<Segment> CreateFinSegment(std::shared_ptr<ClientTcb> tcb)
   seg->header.src_port = tcb->client_port;
   seg->header.dest_port = tcb->server_port;
   seg->header.seq_num = tcb->client_seq_num;
-  seg->header.ack_num = tcb->server_seq_num;   // TODO: Should remain the same as prior packet
+  seg->header.ack_num = tcb->server_seq_num;
   seg->header.length = sizeof(Segment);
   seg->header.type = kFin;
   seg->header.rcv_win = 0;
-  seg->header.checksum = Checksum(seg);
+  seg->header.checksum = Checksum(seg, 0);
 
   return seg;
 }
@@ -288,7 +288,7 @@ static std::shared_ptr<ClientTcb> Demultiplex(std::shared_ptr<Segment> seg) {
 }
 
 static int Input(std::shared_ptr<Segment> seg) {
-  if (!ValidChecksum(seg))
+  if (!ValidChecksum(seg, 0))
     return kFailure;
 
   std::shared_ptr<ClientTcb> tcb = Demultiplex(seg);

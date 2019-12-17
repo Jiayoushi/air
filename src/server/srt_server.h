@@ -8,6 +8,7 @@
 
 
 void SrtServerInit(int conn);
+
 void SrtServerShutdown();
 
 int SrtServerSock(unsigned int server_port);
