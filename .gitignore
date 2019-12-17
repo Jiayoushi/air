@@ -1,4 +1,5 @@
 *.o
+*.so
 tests/CMakeFiles/*
 *.swp
 CMakeFiles
