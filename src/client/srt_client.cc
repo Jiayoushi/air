@@ -88,9 +88,6 @@ struct ClientTcb {
   // First unsent segment
   SendBuffer::iterator unsent;  
 
-
-  //BlockingQueue<Segment> recv_buffer;
-
   ClientTcb(): 
     server_id(0), server_port(0), client_id(0), client_port(0), 
     state(kClosed), initial_seq_num(rand() % std::numeric_limits<unsigned int>::max()),
@@ -416,6 +413,28 @@ int SrtClientDisconnect(int sockfd) {
   return kFailure; 
 }
 
+/*
+ * Go-Back-N
+ * [   Acked   ][   Sent, Unacked   ][   NotSent    ][   NotUsable    ]
+ * [0,      B-1][B,              C-1][C,       B+N-1][B+N,         ...]
+ * B(base): the sequence number of the oldest unacknowledged packet
+ * C(client_seq_num): the smallest unused sequence number
+ *
+ * If C < B+N:       // If there are N unacked packets
+ *  If B==C: start timer            // If this packet is the oldest UnAcked packet 
+ * else: Refuse
+ *
+ * If timeout: restart timer, resent all packets with seq_num from B to C-1
+ * If Recv(pkt) && correct(pkt):
+ *  B = ack + sizeof(pkt)
+ *  If B==C: stop timer         // no unacked packet
+ *  Else: restart timer         // There are still unacked packet
+ *
+ * pkt.ack: all packets up to and including 'pkt.ack' has been acknowledged
+ */
 int SrtClientSend(int sockfd, void *data, unsigned int length) {
+   
+
+
   return 0;
 }

@@ -195,11 +195,6 @@ int SrtServerAccept(int sockfd) {
   return kSuccess;
 }
 
-int SrtServerRecv(int sockfd, void *buffer, unsigned int length) {
-  return 0;
-}
-
-
 static void InputFromIp() {
   while (running) {
     std::shared_ptr<Segment> seg = SnpRecvSegment(overlay_conn);
@@ -244,4 +239,8 @@ void SrtServerShutdown() {
   NotifyShutdown();
 
   input_thread->join();
+}
+
+int SrtServerRecv(int sockfd, void *buffer, unsigned int length) {
+  return 0;
 }
