@@ -28,7 +28,8 @@ struct ServerTcb {
 
   unsigned int state;
 
-  unsigned int expect_seq_num;
+  unsigned int client_seq_num;
+  unsigned int server_seq_num;
   unsigned int initial_seq_num;
 
   std::mutex lock;
@@ -39,7 +40,7 @@ struct ServerTcb {
   unsigned int buffer_size;  // Size of the received data in received buffer
 
   ServerTcb(): server_id(0), server_port(0), client_id(0),
-    client_port(0), state(kClosed), expect_seq_num(0),
+    client_port(0), state(kClosed), client_seq_num(0), server_seq_num(0),
     initial_seq_num(rand() % std::numeric_limits<unsigned int>::max()),
     lock(), recv_buffer(nullptr), buffer_size(0) {}
 };
@@ -85,12 +86,31 @@ static std::shared_ptr<Segment> CreateSynAck(std::shared_ptr<ServerTcb> tcb, std
   return seg;
 }
 
-static void SendSegment(std::shared_ptr<ServerTcb> tcb, enum SegmentType type, std::shared_ptr<Segment> input_seg) {
+static std::shared_ptr<Segment> CreateFinAck(std::shared_ptr<ServerTcb> tcb, std::shared_ptr<Segment> input_seg) {
+  std::shared_ptr<Segment> seg = std::make_shared<Segment>();
+
+  seg->header.src_port = tcb->server_port;
+  seg->header.dest_port = tcb->client_port;
+  seg->header.seq_num = tcb->server_seq_num;
+  seg->header.ack_num = input_seg->header.seq_num + 1;
+  seg->header.length = sizeof(Segment);
+  seg->header.type = kFinAck;
+  seg->header.rcv_win = 0;
+  seg->header.checksum = Checksum(seg);
+
+  return seg;
+}
+
+static void SendSegment(std::shared_ptr<ServerTcb> tcb, enum SegmentType type, 
+                        std::shared_ptr<Segment> input_seg) {
   std::shared_ptr<Segment> seg;
 
   switch (type) {
     case kSynAck:
       seg = CreateSynAck(tcb, input_seg);
+      break;
+    case kFinAck:
+      seg = CreateFinAck(tcb, input_seg);
       break;
     default:
       SDEBUG << "SendSegment: unmatched segment type" << std::endl;
@@ -98,34 +118,60 @@ static void SendSegment(std::shared_ptr<ServerTcb> tcb, enum SegmentType type, s
   }
   
   SnpSendSegment(overlay_conn, seg);
+  SDEBUG << "SENT: " << SegToString(seg) << std::endl;
 }
 
 static int Input(std::shared_ptr<Segment> seg) {
-    std::shared_ptr<ServerTcb> tcb = Demultiplex(seg);
+  if (!CheckCheckSum(seg))
+    return kFailure;
 
-    switch (tcb->state) {
-      case kClosed:
-        std::cerr << "Input: segment received when state is closed" << std::endl;
+  std::shared_ptr<ServerTcb> tcb = Demultiplex(seg);
+  if (tcb == nullptr)
+    return kFailure;
+
+  std::lock_guard<std::mutex> lck(tcb->lock);
+  switch (tcb->state) {
+    case kClosed:
+      std::cerr << "Input: segment received when state is closed" << std::endl;
+      return kFailure;
+
+    case kListening:
+      if (seg->header.type != kSyn)
         return kFailure;
 
-      case kListening:
-        if (seg->header.type != kSyn)
-          return kFailure;
+      tcb->client_seq_num = seg->header.seq_num + 1;
+      tcb->client_port = seg->header.src_port;
+      tcb->state = kConnected;
 
-        tcb->state = kConnected;
-        tcb->expect_seq_num = seg->header.seq_num + 1;
-        tcb->client_port = seg->header.src_port;
-        SendSegment(tcb, kSynAck, seg);
-        tcb->waiting.notify_one();
+      SendSegment(tcb, kSynAck, seg);
+      tcb->waiting.notify_one();
+
+      return kSuccess;
+
+    case kConnected:
+      if (seg->header.type == kFin) {
+        tcb->state = kCloseWait;
+
+        tcb->server_seq_num += 1;
+        tcb->client_seq_num = seg->header.seq_num + 1;
+        //TODO: do we need to handle ack here?
+        SendSegment(tcb, kFinAck, seg);
 
         return kSuccess;
+      }
 
-      case kConnected:
-      case kCloseWait:
-      default:
-        std::cerr << "Error: sockfd already connected" << std::endl;
-        return kFailure;
-    }
+      //if (seg->header.seq_num != tcb->client_seq_num)
+      //  return kFailure;
+
+      break;
+ 
+    case kCloseWait:
+    default:
+     std::cerr << "Error: sockfd already connected" << std::endl;
+     return kFailure;
+  }
+
+  return kSuccess;
 }
 
 
@@ -150,14 +196,11 @@ int SrtServerRecv(int sockfd, void *buffer, unsigned int length) {
 
 static void InputFromIp() {
   while (running) {
-    //SDEBUG << "waiting for an incoming segment" << std::endl;
     std::shared_ptr<Segment> seg = SnpRecvSegment(overlay_conn);
 
     if (seg != nullptr) {
+      SDEBUG << "RECEIVED: " << SegToString(seg) << std::endl;
       Input(seg);
-    } else {
-      // The whole IP stack is down
-      exit(kSuccess);
     }
   }
 }

@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <iostream>
+#include <sstream>
 
 #include "../common/common.h"
 
@@ -138,4 +139,20 @@ unsigned short Checksum(std::shared_ptr<Segment> seg) {
 // TODO
 int CheckCheckSum(std::shared_ptr<Segment> seg) {
   return 0;
+}
+
+std::vector<std::string> type_strings = 
+{"SYN", "SYN_ACK", "FIN", "FIN_ACK", "DATA", "DATA_ACK"};
+
+std::string SegToString(std::shared_ptr<Segment> seg) {
+  std::stringstream ss;
+
+  SrtHeader &h = seg->header;
+
+  ss << "src_port: " << h.src_port << " dest_port: " << h.dest_port
+     << " seq_num: " << h.seq_num << " ack_num: " << h.ack_num
+     << " length: " << h.length << " type: " << type_strings[h.type]
+     << " recv_win: " << h.rcv_win << " checksum: " << h.checksum;
+
+  return ss.str();
 }

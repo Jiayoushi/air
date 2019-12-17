@@ -24,6 +24,7 @@
 #define kConnected       2
 #define kFinWait         3
 
+#define kMaxFinRetry     3
 #define kMaxSynRetry     3
 #define kMaxConnection   1024
 
@@ -64,8 +65,8 @@ struct ClientTcb {
 
   unsigned int initial_seq_num;
   
-  unsigned int next_client_seq_num;
-  unsigned int next_server_seq_num;
+  unsigned int client_seq_num;
+  unsigned int server_seq_num;
   
 
   std::mutex lock;
@@ -76,7 +77,7 @@ struct ClientTcb {
   std::condition_variable waiting;
 
   // Connection
-  unsigned int syn_retry;
+  unsigned int retry;
 
 
 
@@ -94,9 +95,9 @@ struct ClientTcb {
   ClientTcb(): 
     server_id(0), server_port(0), client_id(0), client_port(0), 
     state(kClosed), initial_seq_num(rand() % std::numeric_limits<unsigned int>::max()),
-    next_client_seq_num(0), next_server_seq_num(0),
+    client_seq_num(0), server_seq_num(0),
     lock(),  waiting(),
-    syn_retry(0), send_buffer(), unsent(send_buffer.end()) {
+    retry(0), send_buffer(), unsent(send_buffer.end()) {
     //recv_buffer() {
   }
 };
@@ -157,6 +158,20 @@ static std::shared_ptr<Segment> CreateSynSegment(std::shared_ptr<ClientTcb> tcb)
   return seg;
 }
 
+static std::shared_ptr<Segment> CreateFinSegment(std::shared_ptr<ClientTcb> tcb) {
+  std::shared_ptr<Segment> seg = std::make_shared<Segment>();
+
+  seg->header.src_port = tcb->client_port;
+  seg->header.dest_port = tcb->server_port;
+  seg->header.seq_num = tcb->client_seq_num;
+  seg->header.ack_num = tcb->server_seq_num;   // TODO: Should remain the same as prior packet
+  seg->header.length = sizeof(Segment);
+  seg->header.type = kFin;
+  seg->header.rcv_win = 0;
+  seg->header.checksum = Checksum(seg);
+
+  return seg;
+}
 
 // Establish connection
 int SrtClientConnect(int sockfd, unsigned int server_port) {
@@ -168,23 +183,25 @@ int SrtClientConnect(int sockfd, unsigned int server_port) {
 
   std::shared_ptr<Segment> syn = CreateSynSegment(tcb);
 
-  tcb->next_client_seq_num = syn->header.seq_num + 1;
+  std::unique_lock<std::mutex> lk(tcb->lock);
+
   tcb->state = kSynSent;
   tcb->send_buffer.emplace_back(syn);
-
+  tcb->unsent = --tcb->send_buffer.end();
 
   // Wait until connection timeout or success
-  std::unique_lock<std::mutex> lk(tcb->lock);
   tcb->waiting.wait(lk,
     [&tcb] {
-      return tcb->state == kConnected || tcb->syn_retry == kMaxSynRetry;
+      return tcb->state == kConnected || tcb->retry == kMaxSynRetry;
     });
 
   if (tcb->state == kConnected)
     return kSuccess;
 
-  if (tcb->syn_retry == kMaxSynRetry)
+  if (tcb->retry == kMaxSynRetry) {
+    tcb->state = kClosed;
     return kFailure;
+  }
 
   return kFailure;
 }
@@ -195,15 +212,16 @@ static void ProcessTimeouts(std::shared_ptr<ClientTcb> tcb) {
   for (SendBuffer::iterator it = tcb->send_buffer.begin(); it != tcb->unsent; ++it) {
     SegmentBuffer &seg_buf = *it;
 
-    // TODO: or we can set it as 1, 2, 3, 4... units of time, measured by timeout unit
     if (GetCurrentTime() - seg_buf.send_time > kSynTimeout) {
-      if (tcb->syn_retry == kMaxSynRetry) {
+      if (tcb->retry == kMaxSynRetry) {
         tcb->waiting.notify_one();
         continue;
       }
 
       SnpSendSegment(overlay_conn, seg_buf.segment);
+      CDEBUG << "TIMEOUT SENT: " << SegToString(seg_buf.segment) << std::endl;
       seg_buf.send_time = GetCurrentTime();
+      ++tcb->retry;
     }
   }
 }
@@ -213,6 +231,7 @@ static void ProcessUnsent(std::shared_ptr<ClientTcb> tcb) {
     SegmentBuffer &seg_buf = *tcb->unsent;
 
     SnpSendSegment(overlay_conn, seg_buf.segment);
+    CDEBUG << "SENT: " << SegToString(seg_buf.segment) << std::endl;
 
     seg_buf.send_time = GetCurrentTime();
     ++tcb->unsent;
@@ -251,48 +270,56 @@ static std::shared_ptr<ClientTcb> Demultiplex(std::shared_ptr<Segment> seg) {
   return nullptr;
 }
 
-static void Input(std::shared_ptr<Segment> seg) {
+static int Input(std::shared_ptr<Segment> seg) {
+  if (!CheckCheckSum(seg))
+    return kFailure;
+
   std::shared_ptr<ClientTcb> tcb = Demultiplex(seg);
   if (tcb == nullptr)
-    return;
+    return kFailure;
 
+  std::lock_guard<std::mutex> lck(tcb->lock);
   switch (tcb->state) {
     case kClosed:
-      std::cerr << "input: segment received for closed connection." << std::endl;
       break;
 
     case kSynSent:
-	  if (tcb->syn_retry == kMaxSynRetry) {
-	    tcb->state = kClosed;
-        tcb->waiting.notify_one();
-        break;
-	  }
-
-	  // Check Type
 	  if (seg->header.type != kSynAck)
 	    break;
 
-	  // Check ack number
-	  if (seg->header.ack_num != tcb->next_client_seq_num)
+	  if (seg->header.ack_num != tcb->client_seq_num)
 	    break;
 
+	  tcb->server_seq_num = seg->header.seq_num + 1;
+      tcb->client_seq_num += 1;
+
 	  tcb->state = kConnected;
-	  tcb->next_server_seq_num = seg->header.seq_num + 1;
 
 	  tcb->send_buffer.pop_back();
 	  assert(tcb->send_buffer.empty());
 
-	  // TODO: send an ack back
 
       tcb->waiting.notify_one();
-      break;
+      return kSuccess;
 
-    // TODO:
     case kConnected:
+      break;
     case kFinWait:
+      if (seg->header.type != kFinAck)
+        break;
+
+      if (seg->header.ack_num != tcb->server_seq_num)
+        break;
+
+      tcb->state = kClosed;
+      tcb->waiting.notify_one();
+      return kSuccess;
+
     default:
       break;
   }
+
+  return kFailure;
 }
 
 static void InputFromIp() {
@@ -304,6 +331,7 @@ static void InputFromIp() {
       exit(kFailure);
     }
     
+    CDEBUG << "RECEIVED: " << SegToString(seg) << std::endl;
     Input(seg);
   }
 }
@@ -335,13 +363,38 @@ void SrtClientShutdown() {
   NotifyShutdown();
 
   timeout_thread->join();
-  CDEBUG << "timeout thread exists" << std::endl;
   input_thread->join();
-  CDEBUG << "input thread exists" << std::endl;
 }
 
+
+
+
 int SrtClientDisconnect(int sockfd) {
-  return 0;
+  std::shared_ptr<ClientTcb> tcb = tcb_table[sockfd];
+
+  std::shared_ptr<Segment> fin = CreateFinSegment(tcb);
+
+
+  std::unique_lock<std::mutex> lk(tcb->lock);
+
+  tcb->state = kFinWait;
+  tcb->send_buffer.emplace_back(fin);
+
+  tcb->waiting.wait(lk,
+    [&tcb] {
+      return tcb->state == kClosed || tcb->retry == kMaxFinRetry;
+    });
+
+  if (tcb->state == kClosed)
+    return kSuccess;
+
+  if (tcb->retry == kMaxFinRetry) {
+    tcb->state = kClosed;
+    tcb->retry = 0;
+    return kFailure;
+  }
+
+  return kFailure; 
 }
 
 int SrtClientSend(int sockfd, void *data, unsigned int length) {
