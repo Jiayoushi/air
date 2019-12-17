@@ -95,11 +95,6 @@ std::shared_ptr<Segment> SnpRecvSegment(int connection) {
     }
   }
 
-  if (recved < 0) {
-    perror("Error: recv");
-    exit(kFailure);
-  }
-
   return nullptr;
 }
 
@@ -112,6 +107,7 @@ int SegmentLost(std::shared_ptr<Segment> seg) {
     // 50% chance of losing a segment
     if (rand() % 2 == 0) {
       return kSegmentLost;
+
     // 50% chance of invalid checksum
     } else {
       // Start of the data
@@ -137,8 +133,8 @@ unsigned short Checksum(std::shared_ptr<Segment> seg) {
 }
 
 // TODO
-int CheckCheckSum(std::shared_ptr<Segment> seg) {
-  return 0;
+bool ValidChecksum(std::shared_ptr<Segment> seg) {
+  return true;
 }
 
 std::vector<std::string> type_strings = 
@@ -149,10 +145,10 @@ std::string SegToString(std::shared_ptr<Segment> seg) {
 
   SrtHeader &h = seg->header;
 
-  ss << "src_port: " << h.src_port << " dest_port: " << h.dest_port
-     << " seq_num: " << h.seq_num << " ack_num: " << h.ack_num
-     << " length: " << h.length << " type: " << type_strings[h.type]
-     << " recv_win: " << h.rcv_win << " checksum: " << h.checksum;
+  ss << "src_port=" << h.src_port << ", dest_port=" << h.dest_port
+     << ", seq_num=" << h.seq_num << ", ack_num=" << h.ack_num
+     << ", length=" << h.length << ", type=" << type_strings[h.type]
+     << ", recv_win=" << h.rcv_win << ", checksum=" << h.checksum;
 
   return ss.str();
 }

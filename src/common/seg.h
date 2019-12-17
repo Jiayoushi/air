@@ -47,7 +47,7 @@ int SegmentLost(std::shared_ptr<Segment> seg);
 
 unsigned short Checksum(std::shared_ptr<Segment> seg);
 
-int CheckCheckSum(std::shared_ptr<Segment> seg);
+bool ValidChecksum(std::shared_ptr<Segment> seg);
 
 std::string SegToString(std::shared_ptr<Segment> seg);
 

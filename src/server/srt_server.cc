@@ -28,9 +28,10 @@ struct ServerTcb {
 
   unsigned int state;
 
+
+  unsigned int initial_seq_num;
   unsigned int client_seq_num;
   unsigned int server_seq_num;
-  unsigned int initial_seq_num;
 
   std::mutex lock;
 
@@ -40,8 +41,9 @@ struct ServerTcb {
   unsigned int buffer_size;  // Size of the received data in received buffer
 
   ServerTcb(): server_id(0), server_port(0), client_id(0),
-    client_port(0), state(kClosed), client_seq_num(0), server_seq_num(0),
+    client_port(0), state(kClosed),
     initial_seq_num(rand() % std::numeric_limits<unsigned int>::max()),
+    client_seq_num(0), server_seq_num(initial_seq_num),
     lock(), recv_buffer(nullptr), buffer_size(0) {}
 };
 
@@ -61,7 +63,6 @@ std::shared_ptr<ServerTcb> Demultiplex(std::shared_ptr<Segment> seg) {
     if (tcb_table[tcb_id] == nullptr)
       continue;
 
-    SDEBUG << "CHECK id " << tcb_id << std::endl;
     if ((seg->header.type == kSyn && seg->header.dest_port == tcb_table[tcb_id]->server_port) ||
         (seg->header.src_port == tcb_table[tcb_id]->client_port && seg->header.dest_port == tcb_table[tcb_id]->server_port))
     return tcb_table[tcb_id];
@@ -76,7 +77,7 @@ static std::shared_ptr<Segment> CreateSynAck(std::shared_ptr<ServerTcb> tcb, std
 
   seg->header.src_port = tcb->server_port;
   seg->header.dest_port = tcb->client_port;
-  seg->header.seq_num = tcb->initial_seq_num;
+  seg->header.seq_num = tcb->server_seq_num;
   seg->header.ack_num = input_seg->header.seq_num + 1;
   seg->header.length = sizeof(Segment);
   seg->header.type = kSynAck;
@@ -122,7 +123,7 @@ static void SendSegment(std::shared_ptr<ServerTcb> tcb, enum SegmentType type,
 }
 
 static int Input(std::shared_ptr<Segment> seg) {
-  if (!CheckCheckSum(seg))
+  if (!ValidChecksum(seg))
     return kFailure;
 
   std::shared_ptr<ServerTcb> tcb = Demultiplex(seg);
@@ -199,7 +200,7 @@ static void InputFromIp() {
     std::shared_ptr<Segment> seg = SnpRecvSegment(overlay_conn);
 
     if (seg != nullptr) {
-      SDEBUG << "RECEIVED: " << SegToString(seg) << std::endl;
+      SDEBUG << "RECV: " << SegToString(seg) << std::endl;
       Input(seg);
     }
   }

@@ -31,13 +31,13 @@ int OverlayStart() {
     exit(kFailure);
   }
 
-   /* setsockopt: Handy debugging trick that lets 
+  /* setsockopt: Handy debugging trick that lets 
    * us rerun the server immediately after we kill it; 
    * otherwise we have to wait about 20 secs. 
    * Eliminates "ERROR on binding: Address already in use" error. 
    */
   int optval = 1;
-  setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, 
+  setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR,
 	     (const void *)&optval , sizeof(int));
 
   struct sockaddr_in server_addr;

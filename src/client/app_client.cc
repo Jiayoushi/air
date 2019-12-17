@@ -38,6 +38,11 @@ int OverlayStart() {
     exit(kFailure);
   }
 
+  struct timeval tv;
+  tv.tv_sec = 1;
+  tv.tv_usec = 0;
+  setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+
   struct sockaddr_in server_addr;
   bzero((char *)&server_addr, sizeof(server_addr));
   server_addr.sin_family = AF_INET;
@@ -129,7 +134,6 @@ int main() {
 
   SrtClientShutdown();
   std::cerr << "shutdown " << std::endl;
-
 
   OverlayStop(overlay_conn);
   std::cerr << "overlay stop" << std::endl;
