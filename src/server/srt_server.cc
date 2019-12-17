@@ -157,8 +157,12 @@ static int Input(std::shared_ptr<Segment> seg) {
         tcb->server_seq_num += 1;
         tcb->client_seq_num = seg->header.seq_num + 1;
         //TODO: do we need to handle ack here?
+
         SendSegment(tcb, kFinAck, seg);
 
+        return kSuccess;
+      } else if (seg->header.type == kSyn) {
+        SendSegment(tcb, kSynAck, seg);
         return kSuccess;
       }
 

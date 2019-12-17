@@ -20,7 +20,7 @@
 #define kClientPort2 8002
 #define kServerPort2 8003
 
-#define kWaitTime    3
+#define kWaitTime    100
 
 const char *hostname = "127.0.0.1";
 unsigned int hostport = 8080;

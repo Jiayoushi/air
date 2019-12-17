@@ -15,7 +15,8 @@
 #define kWaitSecondEnd        3
 
 #define kSegmentLost          0
-#define kSegmentNotLost       1
+#define kSegmentError         1
+#define kSegmentIntact        2
 
 int SnpSendSegment(int connection, std::shared_ptr<Segment> seg) {
   assert(seg != nullptr);
@@ -105,32 +106,27 @@ std::shared_ptr<Segment> SnpRecvSegment(int connection) {
   Artificial segment lost and invalid checksum
 */
 int SegmentLost(std::shared_ptr<Segment> seg) {
-  int random = rand() % 100;
-  if (random < kPacketLossRate * 100) {
-    // 50% chance of losing a segment
-    if (rand() % 2 == 0) {
-      return kSegmentLost;
-
-    // 50% chance of invalid checksum
-    } else {
-      // TODO:
-      int len = sizeof(SegmentHeader) + seg->header.length;
-
-      // Random error bit
-      int error_bit = rand() % (len * 8);
-
-      // Flip
-      char *p = (char *)seg.get() + error_bit / 8;
-      *p ^= 1 << (error_bit % 8);
-
-	  return kSegmentNotLost;
-    }
+  if ((rand() % 100) < kPacketLossRate * 100) {
+    return kSegmentLost;
   }
 
-  return kSegmentNotLost;
+  if ((rand() % 100) < kPacketErrorRate * 100) {
+    int len = sizeof(SegmentHeader);
+
+    // Random error bit
+    int error_bit = rand() % (len * 8);
+
+    // Flip
+    char *p = (char *)seg.get() + error_bit / 8;
+    *p ^= 1 << (error_bit % 8);
+
+	return kSegmentError;
+  }
+
+  return kSegmentIntact;
 }
 
-// TODO
+
 unsigned short Checksum(std::shared_ptr<Segment> seg, unsigned int data_size) {
   unsigned short old_checksum = seg->header.checksum;
   seg->header.checksum = 0;
@@ -155,20 +151,27 @@ unsigned short Checksum(std::shared_ptr<Segment> seg, unsigned int data_size) {
   return ~sum;
 }
 
-// TODO
 bool ValidChecksum(std::shared_ptr<Segment> seg, unsigned int data_size) {
   return Checksum(seg, data_size) == seg->header.checksum;
 }
 
 
-
 std::vector<std::string> type_strings = 
 {"SYN", "SYN_ACK", "FIN", "FIN_ACK", "DATA", "DATA_ACK"};
+
+std::string GetTypeString(enum SegmentType type) {
+  if (type < 0 || type >= type_strings.size()) {
+    return "UNMATCHED_TYPE";
+  } else {
+    return type_strings[type];
+  }
+}
 
 std::string SegToString(std::shared_ptr<Segment> seg) {
   std::stringstream ss;
 
   SegmentHeader &h = seg->header;
+
 
   ss << "src_port="   << h.src_port << ", dest_port=" << h.dest_port
      << ", seq_num="  << h.seq_num  << ", ack_num="   << h.ack_num
