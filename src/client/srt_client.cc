@@ -1,6 +1,7 @@
 #include "srt_client.h"
 
 #include <stdlib.h>
+#include <cstring>
 #include <thread>
 #include <queue>
 #include <iterator>
@@ -17,8 +18,8 @@
 #include "../common/timer.h"
 #include "../common/blocking_queue.h"
 #include "../common/common.h"
+#include "../common/send_buffer.h"
 
-// Client States
 #define kClosed          0
 #define kSynSent         1
 #define kConnected       2
@@ -29,255 +30,190 @@
 #define kMaxConnection   1024
 
 
-// The connection to network below
-static int overlay_conn;
-
-
-
-// Store segments in send buffer linked list
-struct SegmentBuffer {
-  std::shared_ptr<Segment> segment;
-  std::chrono::milliseconds send_time;
-
-  SegmentBuffer() = default;
-  SegmentBuffer(std::shared_ptr<Segment> s):
-   segment(s), send_time() {}
-};
-
-typedef std::list<SegmentBuffer> SendBuffer;
-
 /*
  * Client transport control block, the client side of a SRT connection
  * uses this data structure to keep track of connection information
  *
- * The server_id serves as the purpose of 'ip address' when demultiplexing.
+ * The rcv_id serves as the purpose of 'ip address' when demultiplexing.
  * Current implementation supports data segments flow from client to server.
  *
  */
 struct ClientTcb {
-  unsigned int server_id;
-  unsigned int server_port;
-  
-  unsigned int client_id;
-  unsigned int client_port;
+  uint32_t snd_id;
+  uint32_t snd_port;
+  uint32_t state;
+  uint32_t iss;                   /* Initial send sequence number */
+  uint32_t snd_uxt;               /* The oldest unacked segment's sequence number */
+  uint32_t snd_nxt;               /* The next sequence number to be used to send segments */
 
-  unsigned int state;
 
-  unsigned int initial_seq_num;
-  unsigned int client_seq_num;
-  unsigned int server_seq_num;
+  uint32_t rcv_id;
+  uint32_t rcv_port;
+  uint32_t rcv_nxt;
+  uint32_t rcv_win;
+  uint32_t irs;                   /* Initial receive sequence number */
   
 
   std::mutex lock;
-
-  /*
-   * A condition variable used to wait for message either from timeouts or from a new incoming segment
-   */
-  std::condition_variable waiting;
-
-  // Connection
-  unsigned int retry;
-
-
-
-  /*
-   * [unacked][unsent]
-   */
+  std::condition_variable waiting;    /* A condition variable used to wait for message either from timeouts or from a new incoming segment */
   SendBuffer send_buffer; 
 
-  // First unsent segment
-  SendBuffer::iterator unsent;  
-
-  ClientTcb(): 
-    server_id(0), server_port(0), client_id(0), client_port(0), 
-    state(kClosed), initial_seq_num(rand() % std::numeric_limits<unsigned int>::max()),
-    client_seq_num(initial_seq_num), server_seq_num(0),
-    lock(),  waiting(),
-    retry(0), send_buffer(), unsent(send_buffer.end()) {
-    //recv_buffer() {
-  }
+  ClientTcb(uint32_t overlay_conn): 
+    snd_id(0),
+    snd_port(0), 
+    state(kClosed),
+    iss(rand() % std::numeric_limits<uint32_t>::max()),
+    snd_uxt(0), 
+    snd_nxt(iss),
+    rcv_id(0),
+    rcv_port(0),
+    rcv_nxt(0),
+    rcv_win(1),
+    irs(0),
+    lock(),
+    waiting(),
+    send_buffer(overlay_conn) {}
 };
 
-// Unsent segment
-void SendBufferPushBack(std::shared_ptr<ClientTcb> tcb, std::shared_ptr<Segment> seg) {
-  tcb->send_buffer.push_back(seg);
-  if (tcb->unsent == tcb->send_buffer.end())
-    tcb->unsent = --tcb->send_buffer.end();
-}
+typedef std::shared_ptr<ClientTcb> TcbPtr;
+typedef std::chrono::duration<double, std::milli> TimeInterval;
 
-// Acked
-void SendBufferPopFront(std::shared_ptr<ClientTcb> tcb) {
-  assert(!tcb->send_buffer.empty());
-  tcb->send_buffer.pop_front();
-}
-
-
-// A global variable control the running of all threads.
-static std::atomic<bool> running;
-
+static uint32_t overlay_conn;                                      /* Connector to the ip stack */
+static std::atomic<bool> running;                                  /* Control the running of all threads. */
 std::mutex tcb_table_lock;
-static std::vector<std::shared_ptr<ClientTcb>> tcb_table(kMaxConnection, nullptr);
-
-/*
- * A thread responsible for sending timeout
- */
-static std::shared_ptr<std::thread> timeout_thread;
-
-/*
- * A thread responsible for receiving segments from network stack
- */
-static std::shared_ptr<std::thread> input_thread;
-
-
-// Time interval between checking timeouts.
-const static std::chrono::duration<double, std::milli> kTimeoutSleepTime(500);
-
-// If a Syn Ack is not receved after 'kSynTimeout', resend Syn
-const static std::chrono::milliseconds kSynTimeout(6000);   // 6 seconds
+static std::vector<std::shared_ptr<ClientTcb>> tcb_table;
+static std::shared_ptr<std::thread> timeout_thread;                /* Timeout loop */
+static std::shared_ptr<std::thread> input_thread;                  /* Receiving segments from network stack */
+const static TimeInterval kTimeoutLoopInterval(500);               /* Time interval between checking timeouts. */
 
 
 
-int SrtClientSock(unsigned int client_port) {
+int SrtClientSock(uint32_t snd_port) {
   tcb_table_lock.lock();
+
   for (int i = 0; i < kMaxConnection; ++i) {
     if (tcb_table[i] == nullptr) {
-      tcb_table[i] = std::make_shared<ClientTcb>();
-      tcb_table[i]->client_port = client_port;
+      tcb_table[i] = std::make_shared<ClientTcb>(overlay_conn);
+      tcb_table[i]->snd_port = snd_port;
       tcb_table_lock.unlock();
       return i;
     }
   }
 
+  tcb_table_lock.unlock();
   return -1;
 }
 
-static std::shared_ptr<Segment> CreateSynSegment(std::shared_ptr<ClientTcb> tcb) {
-  std::shared_ptr<Segment> seg = std::make_shared<Segment>();
+static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, enum SegmentType type, void *data=nullptr, uint32_t len=0) {
+  SegPtr seg = std::make_shared<Segment>();
 
-  seg->header.src_port = tcb->client_port;
-  seg->header.dest_port = tcb->server_port;
-  seg->header.seq_num = tcb->client_seq_num; 
-  seg->header.ack_num = 0;
-  seg->header.length = sizeof(Segment);
-  seg->header.type = kSyn;
-  seg->header.rcv_win = 0;
-  seg->header.checksum = Checksum(seg, 0);
+  seg->header.src_port = tcb->snd_port;
+  seg->header.dest_port = tcb->rcv_port;
+  seg->header.seq = tcb->snd_nxt;
+  seg->header.length = sizeof(SegmentHeader);
+  seg->header.type = type;
+  seg->header.rcv_win = tcb->rcv_win;
+  seg->header.ack = (type == kSyn) ? 0 : tcb->rcv_nxt;
+  seg->header.checksum = Checksum(seg, len + sizeof(SegmentHeader));
 
-  return seg;
+  if (data) {
+    seg->data = new char[len];
+    memcpy(seg->data, data, len);
+  }
+
+  return std::make_shared<SegmentBuffer>(seg, len + sizeof(SegmentHeader));
 }
 
-static std::shared_ptr<Segment> CreateFinSegment(std::shared_ptr<ClientTcb> tcb) {
-  std::shared_ptr<Segment> seg = std::make_shared<Segment>();
-
-  seg->header.src_port = tcb->client_port;
-  seg->header.dest_port = tcb->server_port;
-  seg->header.seq_num = tcb->client_seq_num;
-  seg->header.ack_num = tcb->server_seq_num;
-  seg->header.length = sizeof(Segment);
-  seg->header.type = kFin;
-  seg->header.rcv_win = 0;
-  seg->header.checksum = Checksum(seg, 0);
-
-  return seg;
-}
-
-// Establish connection
-int SrtClientConnect(int sockfd, unsigned int server_port) {
+/*
+ * Establish connection by completing two way handshake.
+ *
+ * Return value: -1 on error, 0 on success
+ */
+int SrtClientConnect(int sockfd, uint32_t rcv_port) {
   std::shared_ptr<ClientTcb> tcb = tcb_table[sockfd];
-  tcb->server_port = server_port;
-
   if (tcb->state != kClosed)
-    return kFailure;
+    return -1;
 
-  std::shared_ptr<Segment> syn = CreateSynSegment(tcb);
+  /* Lock to ensure the atomicity of send_buffer */
+  std::unique_lock<std::mutex> lk(tcb->lock);
+
+  /* Create Syn Segment and push it back to the sender buffer */
+  if (tcb->send_buffer.Full())
+    return -1;
+  SegBufPtr syn_buf = CreateSegmentBuffer(tcb, kSyn);
+  tcb->send_buffer.PushBack(syn_buf);
+
+  /* Update */
+  tcb->rcv_port = rcv_port;
+  tcb->state = kSynSent;
+  tcb->snd_nxt++;
+
+  /* Wait until connection timeout or success */
+  tcb->waiting.wait(lk,
+    [&tcb] {
+      return tcb->state == kConnected || tcb->send_buffer.MaxRetryReached();
+    });
+
+  /* Success */
+  if (tcb->state == kConnected)
+    return 0;
+
+  /* Connection timed out */
+  tcb->state = kClosed;
+  tcb->snd_nxt = tcb->iss;
+  tcb->send_buffer.Clear();
+
+  return -1;
+}
+
+/*
+ * Teardown connection
+ *
+ * Return value: -1 on failure, 0 on success
+ */
+int SrtClientDisconnect(int sockfd) {
+  std::shared_ptr<ClientTcb> tcb = tcb_table[sockfd];
+  if (tcb == nullptr)
+    return -1;
 
   std::unique_lock<std::mutex> lk(tcb->lock);
 
-  tcb->state = kSynSent;
+  if (tcb->send_buffer.Full())
+    return -1;
+  SegBufPtr seg_buf = CreateSegmentBuffer(tcb, kFin);
+  tcb->send_buffer.PushBack(seg_buf);
 
-  SendBufferPushBack(tcb, syn);
-  //tcb->send_buffer.emplace_back(syn);
-  //tcb->unsent = --tcb->send_buffer.end();
+  /* Update */
+  tcb->state = kFinWait;
+  tcb->snd_nxt++;
 
-  // Wait until connection timeout or success
   tcb->waiting.wait(lk,
     [&tcb] {
-      return tcb->state == kConnected || tcb->retry == kMaxSynRetry;
+      return tcb->state == kClosed || tcb->send_buffer.MaxRetryReached();
     });
 
-  if (tcb->state == kConnected)
-    return kSuccess;
+  if (tcb->state == kClosed)
+    return 0;
 
-  if (tcb->retry == kMaxSynRetry) {
-    tcb->state = kClosed;
-    return kFailure;
-  }
+  /* Timed out */
+  tcb->state = kConnected;
+  tcb->snd_nxt--;
+  tcb->send_buffer.Clear();
 
-  return kFailure;
+  return -1; 
 }
-
-
-
-static void ProcessTimeouts(std::shared_ptr<ClientTcb> tcb) {
-  for (SendBuffer::iterator it = tcb->send_buffer.begin(); it != tcb->unsent; ++it) {
-    SegmentBuffer &seg_buf = *it;
-
-    if (GetCurrentTime() - seg_buf.send_time > kSynTimeout) {
-      if (tcb->retry == kMaxSynRetry) {
-        tcb->waiting.notify_one();
-        continue;
-      }
-
-      SnpSendSegment(overlay_conn, seg_buf.segment);
-      CDEBUG << "TOUT: " << SegToString(seg_buf.segment) << std::endl;
-      seg_buf.send_time = GetCurrentTime();
-      ++tcb->retry;
-    }
-  }
-}
-
-static void ProcessUnsent(std::shared_ptr<ClientTcb> tcb) {
-  if (tcb->unsent != tcb->send_buffer.end()) {
-    SegmentBuffer &seg_buf = *tcb->unsent;
-
-    SnpSendSegment(overlay_conn, seg_buf.segment);
-    CDEBUG << "SENT: " << SegToString(seg_buf.segment) << std::endl;
-
-    seg_buf.send_time = GetCurrentTime();
-    ++tcb->unsent;
-  }
-}
-
-static void Timeout() {
-  while (running) {
-    for (int tcb_id = 0; tcb_id < kMaxConnection; ++tcb_id) {
-      if (tcb_table[tcb_id] == nullptr)
-        continue;
-
-      std::shared_ptr<ClientTcb> tcb = tcb_table[tcb_id];
-      std::lock_guard<std::mutex> lock(tcb->lock);
-
-      ProcessTimeouts(tcb);
-      ProcessUnsent(tcb);
-    }
-
-    std::this_thread::sleep_for(kTimeoutSleepTime);
-  }
-}
-
 
 // Destination port number, the source IP address, and the source port number.
 
 // TODO: right now id is not used to demultiplex, in theory SrtConnect should
 // also have a server node id field
 static std::shared_ptr<ClientTcb> Demultiplex(std::shared_ptr<Segment> seg) {
-  assert(seg != nullptr);
   for (int tcb_id = 0; tcb_id < kMaxConnection; ++tcb_id) {
     if (tcb_table[tcb_id] == nullptr)
       continue;
 
-    if (seg->header.src_port == tcb_table[tcb_id]->server_port &&
-        seg->header.dest_port == tcb_table[tcb_id]->client_port)
+    if (seg->header.src_port == tcb_table[tcb_id]->rcv_port
+     && seg->header.dest_port == tcb_table[tcb_id]->snd_port)
     return tcb_table[tcb_id];
   }
 
@@ -286,55 +222,59 @@ static std::shared_ptr<ClientTcb> Demultiplex(std::shared_ptr<Segment> seg) {
 
 static int Input(std::shared_ptr<Segment> seg) {
   if (!ValidChecksum(seg, 0))
-    return kFailure;
+    return -1;
 
   std::shared_ptr<ClientTcb> tcb = Demultiplex(seg);
   if (tcb == nullptr)
-    return kFailure;
+    return -1;
+
 
   std::lock_guard<std::mutex> lck(tcb->lock);
   switch (tcb->state) {
-    case kClosed:
+    case kClosed: {
       break;
-
-    case kSynSent:
+    }
+    case kSynSent: {
 	  if (seg->header.type != kSynAck) {
-	    break;
-     }
-
-	  if (seg->header.ack_num != tcb->client_seq_num + 1) {
 	    break;
       }
 
-	  tcb->server_seq_num = seg->header.seq_num + 1;
-      tcb->client_seq_num += 1;
+      uint32_t snd_nxt = 0;
+      if ((snd_nxt = tcb->send_buffer.Ack(seg->header.ack)) < 0)
+        break;
 
+      tcb->snd_nxt = snd_nxt;
 	  tcb->state = kConnected;
-
-      SendBufferPopFront(tcb);
-	  //tcb->send_buffer.pop_back();
-	  assert(tcb->send_buffer.empty());
+      tcb->irs = seg->header.seq;
+	  tcb->rcv_nxt = tcb->irs + 1;
 
       tcb->waiting.notify_one();
-      return kSuccess;
+      return 0;
 
-    case kConnected:
+    }
+    case kConnected: {
       break;
-    case kFinWait:
+
+    }
+    case kFinWait: {
       if (seg->header.type != kFinAck)
         break;
 
-      // TODO: need to check ack here?
+      uint32_t snd_nxt = 0;
+      if ((snd_nxt = tcb->send_buffer.Ack(seg->header.ack)) < 0)
+        break;
 
       tcb->state = kClosed;
       tcb->waiting.notify_one();
-      return kSuccess;
 
+      return 0;
+
+    }
     default:
       break;
   }
 
-  return kFailure;
+  return -1;
 }
 
 static void InputFromIp() {
@@ -351,10 +291,36 @@ static void InputFromIp() {
   }
 }
 
+static void Timeout() {
+  while (running) {
+    for (int tcb_id = 0; tcb_id < kMaxConnection; ++tcb_id) {
+      TcbPtr tcb = tcb_table[tcb_id];
+      if (tcb_table[tcb_id] == nullptr)
+        continue;
+
+      if (tcb->send_buffer.Timeout()) {
+        if (tcb->send_buffer.MaxRetryReached()) {
+          tcb->waiting.notify_one();
+          continue;
+        }
+
+        tcb->send_buffer.ResendUnacked(); 
+      }
+    }
+
+    std::this_thread::sleep_for(kTimeoutLoopInterval);
+  }
+}
+
+
+
+
+
 
 
 void SrtClientInit(int conn) {
   overlay_conn = conn;
+  tcb_table = std::vector<TcbPtr>(kMaxConnection, nullptr);
 
   running = true;
   input_thread = std::make_shared<std::thread>(InputFromIp);
@@ -364,8 +330,11 @@ void SrtClientInit(int conn) {
 
 
 int SrtClientClose(int sockfd) {
+  tcb_table_lock.lock();
   tcb_table[sockfd] = nullptr;
-  return kSuccess;
+  tcb_table_lock.unlock();
+
+  return 0;
 }
 
 
@@ -381,60 +350,6 @@ void SrtClientShutdown() {
   input_thread->join();
 }
 
-
-
-
-int SrtClientDisconnect(int sockfd) {
-  std::shared_ptr<ClientTcb> tcb = tcb_table[sockfd];
-
-  std::shared_ptr<Segment> fin = CreateFinSegment(tcb);
-
-
-  std::unique_lock<std::mutex> lk(tcb->lock);
-
-  tcb->state = kFinWait;
-  //tcb->send_buffer.emplace_back(fin);
-  SendBufferPushBack(tcb, fin);
-
-  tcb->waiting.wait(lk,
-    [&tcb] {
-      return tcb->state == kClosed || tcb->retry == kMaxFinRetry;
-    });
-
-  if (tcb->state == kClosed)
-    return kSuccess;
-
-  if (tcb->retry == kMaxFinRetry) {
-    tcb->state = kClosed;
-    tcb->retry = 0;
-    return kFailure;
-  }
-
-  return kFailure; 
-}
-
-/*
- * Go-Back-N
- * [   Acked   ][   Sent, Unacked   ][   NotSent    ][   NotUsable    ]
- * [0,      B-1][B,              C-1][C,       B+N-1][B+N,         ...]
- * B(base): the sequence number of the oldest unacknowledged packet
- * C(client_seq_num): the smallest unused sequence number
- *
- * If C < B+N:       // If there are N unacked packets
- *  If B==C: start timer            // If this packet is the oldest UnAcked packet 
- * else: Refuse
- *
- * If timeout: restart timer, resent all packets with seq_num from B to C-1
- * If Recv(pkt) && correct(pkt):
- *  B = ack + sizeof(pkt)
- *  If B==C: stop timer         // no unacked packet
- *  Else: restart timer         // There are still unacked packet
- *
- * pkt.ack: all packets up to and including 'pkt.ack' has been acknowledged
- */
-int SrtClientSend(int sockfd, void *data, unsigned int length) {
-   
-
-
+int SrtClientSend(int sockfd, void *data, uint32_t length) {
   return 0;
 }

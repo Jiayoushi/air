@@ -10,17 +10,20 @@ add_library(air SHARED
             src/client/srt_client.cc
             src/server/srt_server.cc
             src/common/seg.cc
-            src/common/timer.cc)
+            src/common/timer.cc
+            src/common/send_buffer.cc)
 add_executable(air_client
                src/client/app_client.cc
                src/client/srt_client.cc
                src/common/seg.cc
-               src/common/timer.cc)
+               src/common/timer.cc
+               src/common/send_buffer.cc)
 add_executable(air_server
                src/server/app_server.cc
                src/server/srt_server.cc
                src/common/seg.cc
-               src/common/timer.cc)
+               src/common/timer.cc
+               src/common/send_buffer.cc)
 add_executable(test
                tests/test.cc)
 target_compile_options(air_client PRIVATE -Wall)

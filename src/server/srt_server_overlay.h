@@ -12,7 +12,7 @@ int OverlayServerStart(const char *hostname, unsigned int hostport) {
   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
   if (sockfd < 0) {
     perror("Error: cannot create socket");
-    exit(kFailure);
+    exit(-1);
   }
 
   /* setsockopt: Handy debugging trick that lets 
@@ -34,19 +34,19 @@ int OverlayServerStart(const char *hostname, unsigned int hostport) {
 
   if (bind(sockfd, (const struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
     perror("Error: bind failed");
-    exit(kFailure);
+    exit(-1);
   }
 
   if (listen(sockfd, 5000) < 0) {
     perror("Error: listen failed");
-    exit(kFailure);
+    exit(-1);
   }
 
   socklen_t size = sizeof(server_addr);
   int overlay_fd = 0;
   if ((overlay_fd = accept(sockfd, (struct sockaddr *)&server_addr, &size)) < 0) {
     perror("Error: conncet");
-    exit(kFailure);
+    exit(-1);
   }
 
   return overlay_fd;

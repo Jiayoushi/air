@@ -26,20 +26,20 @@ int SnpSendSegment(int connection, std::shared_ptr<Segment> seg) {
 
   if (send(connection, seg_start, 2, 0) < 0) {
     perror("SnpSendSegment failed to send start");
-    return kFailure;
+    return -1;
   }
 
   if (send(connection, seg.get(), sizeof(Segment), 0) < 0) {
     perror("SnpSendSegment failed to send segment");
-    return kFailure;
+    return -1;
   }
 
   if (send(connection, seg_end, 2, 0) < 0) {
     perror("SnpSendSegment failed to send segment end");
-    return kFailure;
+    return -1;
   }
 
-  return kSuccess;
+  return 0;
 }
 
 
@@ -127,12 +127,11 @@ int SegmentLost(std::shared_ptr<Segment> seg) {
 }
 
 
-unsigned short Checksum(std::shared_ptr<Segment> seg, unsigned int data_size) {
+unsigned short Checksum(std::shared_ptr<Segment> seg, uint32_t count) {
   unsigned short old_checksum = seg->header.checksum;
   seg->header.checksum = 0;
 
   unsigned short *addr = (unsigned short *)seg.get();
-  unsigned int count = sizeof(SegmentHeader) + data_size;
   
   register long sum = 0;
   
@@ -151,15 +150,15 @@ unsigned short Checksum(std::shared_ptr<Segment> seg, unsigned int data_size) {
   return ~sum;
 }
 
-bool ValidChecksum(std::shared_ptr<Segment> seg, unsigned int data_size) {
-  return Checksum(seg, data_size) == seg->header.checksum;
+bool ValidChecksum(std::shared_ptr<Segment> seg, unsigned int size) {
+  return Checksum(seg, size) == seg->header.checksum;
 }
 
 
 std::vector<std::string> type_strings = 
 {"SYN", "SYN_ACK", "FIN", "FIN_ACK", "DATA", "DATA_ACK"};
 
-std::string GetTypeString(enum SegmentType type) {
+std::string GetTypeString(uint16_t type) {
   if (type < 0 || type >= type_strings.size()) {
     return "UNMATCHED_TYPE";
   } else {
@@ -172,10 +171,9 @@ std::string SegToString(std::shared_ptr<Segment> seg) {
 
   SegmentHeader &h = seg->header;
 
-
   ss << "src_port="   << h.src_port << ", dest_port=" << h.dest_port
-     << ", seq_num="  << h.seq_num  << ", ack_num="   << h.ack_num
-     << ", length="   << h.length   << ", type="      << type_strings[h.type]
+     << ", seq="      << h.seq      << ", ack="       << h.ack
+     << ", length="   << h.length   << ", type="      << GetTypeString(h.type)
      << ", recv_win=" << h.rcv_win  << ", checksum="  << h.checksum;
 
   return ss.str();

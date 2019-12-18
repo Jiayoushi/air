@@ -5,14 +5,14 @@ int OverlayClientStart(const char *hostname, unsigned int hostport) {
   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
   if (sockfd < 0) {
     perror("Error: cannot create socket");
-    exit(kFailure);
+    exit(-1);
   }
   
   struct hostent *server;
   server = gethostbyname(hostname);
   if (server == NULL) {
     perror("Error: gethostbyname failed");
-    exit(kFailure);
+    exit(-1);
   }
 
   struct timeval tv;
@@ -29,7 +29,7 @@ int OverlayClientStart(const char *hostname, unsigned int hostport) {
   
   if (connect(sockfd, (const struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
     std::cerr << "Error: connect failed" << std::endl;
-    exit(kFailure);
+    exit(-1);
   }
   
   return sockfd;

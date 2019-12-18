@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <vector>
+#include <chrono>
 
 #include "constants.h"
 
@@ -16,21 +17,44 @@ enum SegmentType {
 };
 
 struct SegmentHeader {
-  unsigned int src_port;
-  unsigned int dest_port;
-  unsigned int seq_num;
-  unsigned int ack_num;
-  unsigned short length;   // Header length
-  unsigned short type;
-  unsigned short rcv_win;
-  unsigned short checksum;
+  uint32_t src_port;
+  uint32_t dest_port;
+  uint32_t seq;
+  uint32_t ack;
+  uint16_t length;       /* Header length */
+  uint16_t type;
+  uint16_t rcv_win;
+  uint16_t checksum;
 };
 
 struct Segment {
   SegmentHeader header;
+  char *data;
 
-  char *data = nullptr;
+  Segment(): data(nullptr) {}
+  ~Segment() { delete [] data; }
 };
+
+typedef std::chrono::milliseconds Timepoint;
+
+/*
+ * Segment Buffer
+ */
+struct SegmentBuffer {
+  std::shared_ptr<Segment> segment;
+  
+  uint32_t data_size; /* Size of the payload, not including header */
+
+  Timepoint send_time; /* Last time this segment was sent */
+
+  SegmentBuffer(std::shared_ptr<Segment> s=nullptr, uint32_t size=0):
+   segment(s), data_size(size), send_time() {}
+};
+
+typedef std::shared_ptr<Segment> SegPtr;
+typedef std::shared_ptr<SegmentBuffer> SegBufPtr;
+
+
 
 /*
   First send "!&" to indicate the start of a segment
@@ -45,10 +69,15 @@ std::shared_ptr<Segment> SnpRecvSegment(int connection);
 
 int SegmentLost(std::shared_ptr<Segment> seg);
 
-unsigned short Checksum(std::shared_ptr<Segment> seg, unsigned int data_size);
+uint16_t Checksum(std::shared_ptr<Segment> seg, uint32_t size);
 
-bool ValidChecksum(std::shared_ptr<Segment> seg, unsigned int data_size);
+bool ValidChecksum(std::shared_ptr<Segment> seg, uint32_t size);
 
 std::string SegToString(std::shared_ptr<Segment> seg);
+
+
+
+
+
 
 #endif

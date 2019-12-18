@@ -33,7 +33,7 @@ int main() {
   int overlay_conn = OverlayClientStart(hostname, hostport);
   if (overlay_conn < 0) {
     std::cerr << "Failed to start overlay" << std::endl;
-    exit(kFailure);
+    exit(-1);
   }
 
   SrtClientInit(overlay_conn);
@@ -43,13 +43,13 @@ int main() {
   int sockfd = SrtClientSock(kClientPort1);
   if (sockfd < 0) {
     std::cerr << "Failed to create srt client sock" << std::endl;
-    exit(kFailure);
+    exit(-1);
   }
   std::cerr << "socket created: " << sockfd << std::endl;
 
   if (SrtClientConnect(sockfd, kServerPort1) < 0) {
     std::cerr << "Failed to connect to srt server" << std::endl;
-    exit(kFailure);
+    exit(-1);
   }
   printf("Client port [%d] connects to server [%d]\n", kClientPort1, kServerPort1);
 
@@ -57,12 +57,12 @@ int main() {
   int sockfd2 = SrtClientSock(kClientPort2);
   if (sockfd2 < 0) {
     std::cerr << "Failed to create srt client sock" << std::endl;
-    exit(kFailure);
+    exit(-1);
   }
 
   if (SrtClientConnect(sockfd2, kServerPort2) < 0) {
     std::cerr << "Failed to connect to srt server" << std::endl;
-    exit(kFailure);
+    exit(-1);
   }
   printf("Client port [%d] connects to server [%d]\n", kClientPort2, kServerPort2);
 

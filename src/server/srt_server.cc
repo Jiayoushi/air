@@ -28,10 +28,9 @@ struct ServerTcb {
 
   unsigned int state;
 
-
-  unsigned int initial_seq_num;
-  unsigned int client_seq_num;
-  unsigned int server_seq_num;
+  unsigned int initial_seq;
+  unsigned int client_seq;
+  unsigned int server_seq;
 
   std::mutex lock;
 
@@ -42,8 +41,8 @@ struct ServerTcb {
 
   ServerTcb(): server_id(0), server_port(0), client_id(0),
     client_port(0), state(kClosed),
-    initial_seq_num(rand() % std::numeric_limits<unsigned int>::max()),
-    client_seq_num(0), server_seq_num(initial_seq_num),
+    initial_seq(rand() % std::numeric_limits<unsigned int>::max()),
+    client_seq(0), server_seq(initial_seq),
     lock(), recv_buffer(nullptr), buffer_size(0) {}
 };
 
@@ -77,8 +76,8 @@ static std::shared_ptr<Segment> CreateSynAck(std::shared_ptr<ServerTcb> tcb, std
 
   seg->header.src_port = tcb->server_port;
   seg->header.dest_port = tcb->client_port;
-  seg->header.seq_num = tcb->server_seq_num;
-  seg->header.ack_num = input_seg->header.seq_num + 1;
+  seg->header.seq = tcb->server_seq;
+  seg->header.ack = input_seg->header.seq + 1;
   seg->header.length = sizeof(Segment);
   seg->header.type = kSynAck;
   seg->header.rcv_win = 0;
@@ -92,8 +91,8 @@ static std::shared_ptr<Segment> CreateFinAck(std::shared_ptr<ServerTcb> tcb, std
 
   seg->header.src_port = tcb->server_port;
   seg->header.dest_port = tcb->client_port;
-  seg->header.seq_num = tcb->server_seq_num;
-  seg->header.ack_num = input_seg->header.seq_num + 1;
+  seg->header.seq = tcb->server_seq;
+  seg->header.ack = input_seg->header.seq + 1;
   seg->header.length = sizeof(Segment);
   seg->header.type = kFinAck;
   seg->header.rcv_win = 0;
@@ -124,60 +123,60 @@ static void SendSegment(std::shared_ptr<ServerTcb> tcb, enum SegmentType type,
 
 static int Input(std::shared_ptr<Segment> seg) {
   if (!ValidChecksum(seg, 0)) {
-    return kFailure;
+    return -1;
   }
 
   std::shared_ptr<ServerTcb> tcb = Demultiplex(seg);
   if (tcb == nullptr)
-    return kFailure;
+    return -1;
 
   std::lock_guard<std::mutex> lck(tcb->lock);
   switch (tcb->state) {
     case kClosed:
       std::cerr << "Input: segment received when state is closed" << std::endl;
-      return kFailure;
+      return -1;
 
     case kListening:
       if (seg->header.type != kSyn)
-        return kFailure;
+        return -1;
 
-      tcb->client_seq_num = seg->header.seq_num + 1;
+      tcb->client_seq = seg->header.seq + 1;
       tcb->client_port = seg->header.src_port;
       tcb->state = kConnected;
 
       SendSegment(tcb, kSynAck, seg);
       tcb->waiting.notify_one();
 
-      return kSuccess;
+      return 0;
 
     case kConnected:
       if (seg->header.type == kFin) {
         tcb->state = kCloseWait;
 
-        tcb->server_seq_num += 1;
-        tcb->client_seq_num = seg->header.seq_num + 1;
+        tcb->server_seq += 1;
+        tcb->client_seq = seg->header.seq + 1;
         //TODO: do we need to handle ack here?
 
         SendSegment(tcb, kFinAck, seg);
 
-        return kSuccess;
+        return 0;
       } else if (seg->header.type == kSyn) {
         SendSegment(tcb, kSynAck, seg);
-        return kSuccess;
+        return 0;
       }
 
-      //if (seg->header.seq_num != tcb->client_seq_num)
-      //  return kFailure;
+      //if (seg->header.seq != tcb->client_seq)
+      //  return -1;
 
       break;
  
     case kCloseWait:
     default:
      std::cerr << "Error: sockfd already connected" << std::endl;
-     return kFailure;
+     return -1;
   }
 
-  return kSuccess;
+  return 0;
 }
 
 
@@ -192,7 +191,7 @@ int SrtServerAccept(int sockfd) {
       return tcb->state == kConnected; 
     });
 
-  return kSuccess;
+  return 0;
 }
 
 static void InputFromIp() {
@@ -211,7 +210,7 @@ int SrtServerSock(unsigned int server_port) {
     if (tcb_table[i] == nullptr) {
       tcb_table[i] = std::make_shared<ServerTcb>();
       tcb_table[i]->server_port = server_port;
-      tcb_table[i]->state = kListening;    // Combine the 'bind' and 'sockfd' into one
+      tcb_table[i]->state = kListening;
       return i;
     }
   }
@@ -221,7 +220,7 @@ int SrtServerSock(unsigned int server_port) {
 
 int SrtServerClose(int sockfd) {
   tcb_table[sockfd] = nullptr;
-  return kSuccess;
+  return 0;
 }
 
 void SrtServerInit(int conn) {
