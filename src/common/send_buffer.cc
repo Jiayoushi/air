@@ -62,10 +62,13 @@ size_t SendBuffer::Ack(uint32_t ack) {
 
   size_t count = 0;
   while (!unacked_.empty()
-      && unacked_.front()->segment->header.seq <= ack) {
+      && unacked_.front()->segment->header.seq < ack) {
     unacked_.pop_front();
     ++count;
   }
+
+  if (count != 0)
+    retry = 0;
 
   return count;
 }

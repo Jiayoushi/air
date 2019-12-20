@@ -64,9 +64,9 @@ struct ClientTcb {
     dest_id(0),
     dest_port(0),
     state(kClosed),
-    iss(rand() % std::numeric_limits<uint32_t>::max()),
+    iss(0),//rand() % std::numeric_limits<uint32_t>::max()),
     snd_una(0), 
-    snd_nxt(iss),
+    snd_nxt(iss + 1),
     rcv_nxt(0),
     rcv_win(1),
     irs(0),
@@ -201,6 +201,8 @@ int SrtClientDisconnect(int sockfd) {
   tcb->state = kConnected;
   tcb->snd_nxt--;
   tcb->send_buffer.Clear();
+  
+  CDEBUG << "Disconnect max retry reached" << std::endl;
 
   return -1; 
 }

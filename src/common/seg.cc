@@ -134,6 +134,7 @@ SegBufPtr SnpRecvSegment(int connection) {
 */
 int SegmentLost(std::shared_ptr<Segment> seg) {
   if ((rand() % 100) < kPacketLossRate * 100) {
+    std::cerr << "[LOST]" << std::endl;
     return kSegmentLost;
   }
 

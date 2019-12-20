@@ -20,7 +20,7 @@
 #define kClientPort2 8002
 #define kServerPort2 8003
 
-#define kWaitTime    5
+#define kWaitTime    100
 
 const char *hostname = "127.0.0.1";
 unsigned int hostport = 8080;
@@ -55,7 +55,7 @@ int main() {
     exit(EXIT_FAILURE);
   }
   SrtServerAccept(sockfd2);
-  std::cerr << "Accept #1 succeed" << std::endl;
+  std::cerr << "Accept #2 succeed" << std::endl;
 
   // Sleep
   sleep(kWaitTime);

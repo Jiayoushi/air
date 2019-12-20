@@ -44,8 +44,8 @@ struct ServerTcb {
 
   ServerTcb(): src_id(0), src_port(0), dest_id(0),
     dest_port(0), state(kClosed),
-    iss(rand() % std::numeric_limits<unsigned int>::max()),
-    snd_nxt(iss),
+    iss(100), //rand() % std::numeric_limits<unsigned int>::max()),
+    snd_nxt(iss + 1),
     rcv_nxt(0),
     rcv_win(1),
     lock(), recv_buffer(nullptr), buffer_size(0) {}
@@ -82,7 +82,12 @@ static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, enum SegmentType type, void *da
 
   seg->header.src_port = tcb->src_port;
   seg->header.dest_port = tcb->dest_port;
-  seg->header.seq = tcb->snd_nxt;
+
+  if (type == kSynAck && tcb->state == kConnected)
+    seg->header.seq = tcb->iss + 1;
+  else
+    seg->header.seq = tcb->snd_nxt;
+
   seg->header.length = sizeof(SegmentHeader);
   seg->header.type = type;
   seg->header.rcv_win = tcb->rcv_win;
@@ -123,12 +128,13 @@ static int Input(SegBufPtr seg_buf) {
 
       tcb->rcv_nxt = seg->header.seq + 1;
       tcb->dest_port = seg->header.src_port;
-      tcb->state = kConnected;
 
       SegBufPtr seg_buf = CreateSegmentBuffer(tcb, kSynAck);
       SnpSendSegment(overlay_conn, seg_buf);
+ 
+      tcb->state = kConnected;
       tcb->snd_nxt += 1;
-      
+     
       SDEBUG << "SENT: " << SegToString(seg_buf->segment) << std::endl;
       tcb->waiting.notify_one();
 
@@ -137,7 +143,6 @@ static int Input(SegBufPtr seg_buf) {
     case kConnected: {
       if (seg->header.type == kFin) {
         tcb->state = kCloseWait;
-        tcb->snd_nxt += 1;
 
         SegBufPtr seg_buf = CreateSegmentBuffer(tcb, kFinAck);
         SnpSendSegment(overlay_conn, seg_buf);
@@ -152,9 +157,15 @@ static int Input(SegBufPtr seg_buf) {
 
       break;
    }
-    // TODO
-   case kCloseWait:
-     break;
+   case kCloseWait: {
+     if (seg->header.type != kFin)
+       break;
+   
+     SegBufPtr seg_buf = CreateSegmentBuffer(tcb, kFinAck);
+     SnpSendSegment(overlay_conn, seg_buf);
+     SDEBUG << "SENT: " << SegToString(seg_buf->segment) << std::endl;
+     return 0;           
+   }
    default:
      std::cerr << "Error: sockfd already connected" << std::endl;
      return -1;
