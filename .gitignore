@@ -1,4 +1,5 @@
 *.o
+*.a
 *.so
 tests/CMakeFiles/*
 *.swp
@@ -12,7 +13,9 @@ build
 *log.txt
 *dialogue.txt
 
-tests/*.txt
+unit_test
+file_server
+file_client
 
 air_client
 air_server
