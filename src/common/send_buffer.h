@@ -34,16 +34,14 @@ class SendBuffer {
   int PushBack(SegBufPtr seg_buf);
   void ResendUnacked();
   void SendTopUnsent();
-  int Ack(uint32_t);
+  uint32_t SendUnsent();
+  size_t Ack(uint32_t);
   void Clear();
 
   bool Full() const;
   bool Timeout() const;
   bool MaxRetryReached() const;
-  bool ValidAck(uint32_t ack) const;
 };
-
-
 
 inline void SendBuffer::Clear() {
   retry = 0;
@@ -54,10 +52,6 @@ inline void SendBuffer::Clear() {
 
 inline bool SendBuffer::Full() const {
   return unsent_.size() == kUnsentCapacity;
-}
-
-inline bool SendBuffer::ValidAck(uint32_t ack) const {
-  return seq_nums_.find(ack) != seq_nums_.end();
 }
 
 inline bool SendBuffer::MaxRetryReached() const {

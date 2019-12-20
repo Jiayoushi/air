@@ -3,7 +3,7 @@
 
 /* Test */
 #define kPacketLossRate 				0
-#define kPacketErrorRate                0.25
+#define kPacketErrorRate                0.33
 
 /* Send */
 #define kGbnWindowSize                  5

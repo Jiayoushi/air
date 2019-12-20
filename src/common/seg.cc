@@ -18,8 +18,9 @@
 #define kSegmentError         1
 #define kSegmentIntact        2
 
-int SnpSendSegment(int connection, std::shared_ptr<Segment> seg) {
-  assert(seg != nullptr);
+int SnpSendSegment(int connection, SegBufPtr seg_buf) {
+  assert(seg_buf != nullptr);
+  assert(seg_buf->segment != nullptr);
 
   const char *seg_start = "!&";
   const char *seg_end = "!#";
@@ -29,7 +30,9 @@ int SnpSendSegment(int connection, std::shared_ptr<Segment> seg) {
     return -1;
   }
 
-  if (send(connection, seg.get(), sizeof(Segment), 0) < 0) {
+  //std::cerr << "SnpSendSegment data size" << seg_buf->data_size << std::endl;
+
+  if (send(connection, seg_buf->segment.get(), sizeof(SegmentHeader) + seg_buf->data_size, 0) < 0) {
     perror("SnpSendSegment failed to send segment");
     return -1;
   }
@@ -44,10 +47,10 @@ int SnpSendSegment(int connection, std::shared_ptr<Segment> seg) {
 
 
 char buf[65535];
-std::shared_ptr<Segment> SnpRecvSegment(int connection) {
+SegBufPtr SnpRecvSegment(int connection) {
   memset(buf, 0, 65535);
 
-  int idx = 0;
+  uint32_t idx = 0;
 
   int state = kWaitFirstStart;
   char c;
@@ -75,16 +78,40 @@ std::shared_ptr<Segment> SnpRecvSegment(int connection) {
         buf[idx++] = c;
         // "!#" is received, the segment receiving is complete
         if (c == '#') {
-          std::shared_ptr<Segment> seg = std::make_shared<Segment>();
-          memcpy(&seg.get()->header, buf, sizeof(SegmentHeader));
+          SegBufPtr seg_buf = std::make_shared<SegmentBuffer>();
+          SegPtr seg = std::make_shared<Segment>();
+          seg_buf->segment = seg;
+          /*
+           *               !#
+           * [Header][Data]  idx
+           */
 
-          if (SegmentLost(seg) == kSegmentLost) {
+          //buf[idx] = 0;
+          //std::cerr << idx << std::endl;
+          //std::cerr << sizeof(SegmentHeader) << std::endl;
+          //std::cerr << strlen(buf) << std::endl;
+          //std::cerr << buf << std::endl;
+
+          // Header
+          memcpy(&seg->header, buf, sizeof(SegmentHeader));
+          
+
+          // data
+          uint32_t data_size = idx - 2 - sizeof(SegmentHeader);
+          if (data_size > 0) {
+            seg_buf->data_size = data_size;
+            seg->data = new char[data_size];
+            memcpy(seg->data, buf + sizeof(SegmentHeader), data_size);
+          }
+
+          /* Artificial packet loss and packet error */
+          if (SegmentLost(seg_buf->segment) == kSegmentLost) {
             state = kWaitFirstStart;
             idx = 0;
             continue;
           }
 
-          return seg;
+          return seg_buf;
         } else if (c == '!') {
           // Previous '!' is not end control character
           // This one might be, so still wait for '#'
@@ -151,7 +178,11 @@ unsigned short Checksum(std::shared_ptr<Segment> seg, uint32_t count) {
 }
 
 bool ValidChecksum(std::shared_ptr<Segment> seg, unsigned int size) {
-  return Checksum(seg, size) == seg->header.checksum;
+  uint16_t got = Checksum(seg, size);
+
+  if (got != seg->header.checksum)
+    std::cerr << "cheksum: got " << got << " expected " << seg->header.checksum << std::endl;
+  return got  == seg->header.checksum;
 }
 
 

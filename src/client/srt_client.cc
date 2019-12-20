@@ -34,21 +34,21 @@
  * Client transport control block, the client side of a SRT connection
  * uses this data structure to keep track of connection information
  *
- * The rcv_id serves as the purpose of 'ip address' when demultiplexing.
+ * The dest_id serves as the purpose of 'ip address' when demultiplexing.
  * Current implementation supports data segments flow from client to server.
  *
  */
 struct ClientTcb {
-  uint32_t snd_id;
-  uint32_t snd_port;
+  uint32_t src_id;
+  uint32_t src_port;
+  uint32_t dest_id;
+  uint32_t dest_port;
+
   uint32_t state;
   uint32_t iss;                   /* Initial send sequence number */
-  uint32_t snd_uxt;               /* The oldest unacked segment's sequence number */
+  uint32_t snd_una;               /* The oldest unacked segment's sequence number */
   uint32_t snd_nxt;               /* The next sequence number to be used to send segments */
 
-
-  uint32_t rcv_id;
-  uint32_t rcv_port;
   uint32_t rcv_nxt;
   uint32_t rcv_win;
   uint32_t irs;                   /* Initial receive sequence number */
@@ -59,14 +59,14 @@ struct ClientTcb {
   SendBuffer send_buffer; 
 
   ClientTcb(uint32_t overlay_conn): 
-    snd_id(0),
-    snd_port(0), 
+    src_id(0),
+    src_port(0), 
+    dest_id(0),
+    dest_port(0),
     state(kClosed),
     iss(rand() % std::numeric_limits<uint32_t>::max()),
-    snd_uxt(0), 
+    snd_una(0), 
     snd_nxt(iss),
-    rcv_id(0),
-    rcv_port(0),
     rcv_nxt(0),
     rcv_win(1),
     irs(0),
@@ -88,13 +88,13 @@ const static TimeInterval kTimeoutLoopInterval(500);               /* Time inter
 
 
 
-int SrtClientSock(uint32_t snd_port) {
+int SrtClientSock(uint32_t src_port) {
   tcb_table_lock.lock();
 
   for (int i = 0; i < kMaxConnection; ++i) {
     if (tcb_table[i] == nullptr) {
       tcb_table[i] = std::make_shared<ClientTcb>(overlay_conn);
-      tcb_table[i]->snd_port = snd_port;
+      tcb_table[i]->src_port = src_port;
       tcb_table_lock.unlock();
       return i;
     }
@@ -104,24 +104,24 @@ int SrtClientSock(uint32_t snd_port) {
   return -1;
 }
 
-static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, enum SegmentType type, void *data=nullptr, uint32_t len=0) {
+static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, enum SegmentType type, void *data=nullptr, uint32_t data_size=0) {
   SegPtr seg = std::make_shared<Segment>();
 
-  seg->header.src_port = tcb->snd_port;
-  seg->header.dest_port = tcb->rcv_port;
+  seg->header.src_port = tcb->src_port;
+  seg->header.dest_port = tcb->dest_port;
   seg->header.seq = tcb->snd_nxt;
   seg->header.length = sizeof(SegmentHeader);
   seg->header.type = type;
   seg->header.rcv_win = tcb->rcv_win;
   seg->header.ack = (type == kSyn) ? 0 : tcb->rcv_nxt;
-  seg->header.checksum = Checksum(seg, len + sizeof(SegmentHeader));
+  seg->header.checksum = Checksum(seg, data_size + sizeof(SegmentHeader));
 
   if (data) {
-    seg->data = new char[len];
-    memcpy(seg->data, data, len);
+    seg->data = new char[data_size];
+    memcpy(seg->data, data, data_size);
   }
 
-  return std::make_shared<SegmentBuffer>(seg, len + sizeof(SegmentHeader));
+  return std::make_shared<SegmentBuffer>(seg, data_size);
 }
 
 /*
@@ -129,7 +129,7 @@ static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, enum SegmentType type, void *da
  *
  * Return value: -1 on error, 0 on success
  */
-int SrtClientConnect(int sockfd, uint32_t rcv_port) {
+int SrtClientConnect(int sockfd, uint32_t dest_port) {
   std::shared_ptr<ClientTcb> tcb = tcb_table[sockfd];
   if (tcb->state != kClosed)
     return -1;
@@ -140,11 +140,13 @@ int SrtClientConnect(int sockfd, uint32_t rcv_port) {
   /* Create Syn Segment and push it back to the sender buffer */
   if (tcb->send_buffer.Full())
     return -1;
+
+  tcb->dest_port = dest_port;
   SegBufPtr syn_buf = CreateSegmentBuffer(tcb, kSyn);
   tcb->send_buffer.PushBack(syn_buf);
 
   /* Update */
-  tcb->rcv_port = rcv_port;
+  tcb->dest_port = dest_port;
   tcb->state = kSynSent;
   tcb->snd_nxt++;
 
@@ -212,22 +214,27 @@ static std::shared_ptr<ClientTcb> Demultiplex(std::shared_ptr<Segment> seg) {
     if (tcb_table[tcb_id] == nullptr)
       continue;
 
-    if (seg->header.src_port == tcb_table[tcb_id]->rcv_port
-     && seg->header.dest_port == tcb_table[tcb_id]->snd_port)
+    if (seg->header.src_port == tcb_table[tcb_id]->dest_port
+     && seg->header.dest_port == tcb_table[tcb_id]->src_port)
     return tcb_table[tcb_id];
   }
 
   return nullptr;
 }
 
-static int Input(std::shared_ptr<Segment> seg) {
-  if (!ValidChecksum(seg, 0))
+static int Input(SegBufPtr seg_buf) {
+  SegPtr seg = seg_buf->segment; 
+
+  if (!ValidChecksum(seg, seg_buf->data_size + sizeof(SegmentHeader))) {
+    CDEBUG << "Invalid checksum" << std::endl;
     return -1;
+  }
 
   std::shared_ptr<ClientTcb> tcb = Demultiplex(seg);
-  if (tcb == nullptr)
+  if (tcb == nullptr) {
+    CDEBUG << "No matching tcb" << std::endl;
     return -1;
-
+  }
 
   std::lock_guard<std::mutex> lck(tcb->lock);
   switch (tcb->state) {
@@ -239,22 +246,19 @@ static int Input(std::shared_ptr<Segment> seg) {
 	    break;
       }
 
-      uint32_t snd_nxt = 0;
-      if ((snd_nxt = tcb->send_buffer.Ack(seg->header.ack)) < 0)
-        break;
+      size_t acked = tcb->send_buffer.Ack(seg->header.ack);
+      CDEBUG << "ACKED: " << acked << std::endl;
+      tcb->send_buffer.SendUnsent();
 
-      tcb->snd_nxt = snd_nxt;
 	  tcb->state = kConnected;
       tcb->irs = seg->header.seq;
 	  tcb->rcv_nxt = tcb->irs + 1;
 
       tcb->waiting.notify_one();
       return 0;
-
     }
     case kConnected: {
       break;
-
     }
     case kFinWait: {
       if (seg->header.type != kFinAck)
@@ -279,14 +283,14 @@ static int Input(std::shared_ptr<Segment> seg) {
 
 static void InputFromIp() {
   while (1) {
-    std::shared_ptr<Segment> seg = SnpRecvSegment(overlay_conn);
+    SegBufPtr seg_buf = SnpRecvSegment(overlay_conn);
 
     if (!running)
       break;
 
-    if (seg != nullptr) {
-      CDEBUG << "RECV: " << SegToString(seg) << std::endl;
-      Input(seg);
+    if (seg_buf != nullptr) {
+      CDEBUG << "RECV: " << SegToString(seg_buf->segment) << std::endl;
+      Input(seg_buf);
     }
   }
 }
@@ -311,12 +315,6 @@ static void Timeout() {
     std::this_thread::sleep_for(kTimeoutLoopInterval);
   }
 }
-
-
-
-
-
-
 
 void SrtClientInit(int conn) {
   overlay_conn = conn;

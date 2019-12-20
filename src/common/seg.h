@@ -63,9 +63,9 @@ typedef std::shared_ptr<SegmentBuffer> SegBufPtr;
 
   Return -1 on error, 0 on success.
 */
-int SnpSendSegment(int connection, std::shared_ptr<Segment> seg);
+int SnpSendSegment(int connection, SegBufPtr seg_buf);
 
-std::shared_ptr<Segment> SnpRecvSegment(int connection);
+SegBufPtr SnpRecvSegment(int connection);
 
 int SegmentLost(std::shared_ptr<Segment> seg);
 
