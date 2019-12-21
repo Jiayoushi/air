@@ -17,11 +17,11 @@ void SendBuffer::ResendUnacked() {
   for (auto p = unacked_.begin(); p != unacked_.end(); ++p) {
     SnpSendSegment(kOverlayConn, (*p));
 
-    CDEBUG << "RESEND: " << SegToString((*p)->segment) << std::endl;
+    CDEBUG << "RESEND: " << *p << std::endl;
     (*p)->send_time = GetCurrentTime();
   }
 
-  ++retry;
+  ++retry_;
 }
 
 bool SendBuffer::Timeout() const {
@@ -32,15 +32,18 @@ bool SendBuffer::Timeout() const {
          std::chrono::milliseconds(kTimeoutIntervalInMs);
 }
 
+void SendBuffer::PopUnsentFront() {
+  unacked_.pop_front();
+}
+
 void SendBuffer::SendTopUnsent() {
   if (unsent_.empty())
     return;
 
   SegBufPtr seg_buf = unsent_.front();
   SnpSendSegment(kOverlayConn, seg_buf);
-  CDEBUG << "Send: " << SegToString(seg_buf->segment) << std::endl;
+  CDEBUG << "Send: " << seg_buf << std::endl;
 
-  seq_nums_.insert(seg_buf->segment->header.seq);
   unacked_.push_back(seg_buf);
   unsent_.pop_front();
 }
@@ -63,12 +66,14 @@ size_t SendBuffer::Ack(uint32_t ack) {
   size_t count = 0;
   while (!unacked_.empty()
       && unacked_.front()->segment->header.seq < ack) {
+
+    unacked_.front()->acked_time = GetCurrentTime();
     unacked_.pop_front();
     ++count;
   }
 
   if (count != 0)
-    retry = 0;
+    retry_ = 0;
 
   return count;
 }

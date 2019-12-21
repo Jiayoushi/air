@@ -7,7 +7,8 @@
 #include <atomic>
 #include <condition_variable>
 
-#include "../common/common.h"
+#include "common/recv_buffer.h"
+#include "common/common.h"
 
 #define kClosed        1
 #define kListening     2
@@ -16,7 +17,7 @@
 
 #define kMaxConnection 1024
 
-static int overlay_conn;
+static uint32_t overlay_conn;
 
 
 // Server transport control block.
@@ -39,8 +40,7 @@ struct ServerTcb {
 
   std::condition_variable waiting;
 
-  char *recv_buffer;         // Reciving buffer
-  unsigned int buffer_size;  // Size of the received data in received buffer
+  RecvBuffer recv_buffer;
 
   ServerTcb(): src_id(0), src_port(0), dest_id(0),
     dest_port(0), state(kClosed),
@@ -48,7 +48,8 @@ struct ServerTcb {
     snd_nxt(iss + 1),
     rcv_nxt(0),
     rcv_win(1),
-    lock(), recv_buffer(nullptr), buffer_size(0) {}
+    lock(),
+    recv_buffer() {}
 };
 
 std::mutex table_lock;
@@ -77,27 +78,27 @@ std::shared_ptr<ServerTcb> Demultiplex(std::shared_ptr<Segment> seg) {
   return nullptr;
 }
 
-static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, enum SegmentType type, void *data=nullptr, uint32_t len=0) {
+static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, enum SegmentType type, const void *data=nullptr, uint32_t len=0) {
   SegPtr seg = std::make_shared<Segment>();
 
   seg->header.src_port = tcb->src_port;
   seg->header.dest_port = tcb->dest_port;
 
-  if (type == kSynAck && tcb->state == kConnected)
+  if (type == kSynAck)
     seg->header.seq = tcb->iss + 1;
   else
-    seg->header.seq = tcb->snd_nxt;
+    seg->header.seq = 0; //tcb->snd_nxt;
 
   seg->header.length = sizeof(SegmentHeader);
   seg->header.type = type;
   seg->header.rcv_win = tcb->rcv_win;
   seg->header.ack = (type == kSyn) ? 0 : tcb->rcv_nxt;
-  seg->header.checksum = Checksum(seg, len + sizeof(SegmentHeader));
 
   if (data) {
-    seg->data = new char[len];
     memcpy(seg->data, data, len);
   }
+
+  seg->header.checksum = Checksum(seg, len + sizeof(SegmentHeader));
 
   return std::make_shared<SegmentBuffer>(seg, len);
 }
@@ -129,29 +130,46 @@ static int Input(SegBufPtr seg_buf) {
       tcb->rcv_nxt = seg->header.seq + 1;
       tcb->dest_port = seg->header.src_port;
 
-      SegBufPtr seg_buf = CreateSegmentBuffer(tcb, kSynAck);
-      SnpSendSegment(overlay_conn, seg_buf);
+      SegBufPtr syn_ack = CreateSegmentBuffer(tcb, kSynAck);
+      SnpSendSegment(overlay_conn, syn_ack);
  
       tcb->state = kConnected;
       tcb->snd_nxt += 1;
      
-      SDEBUG << "SENT: " << SegToString(seg_buf->segment) << std::endl;
+      SDEBUG << "SENT: " << syn_ack << std::endl;
       tcb->waiting.notify_one();
 
       return 0;
     }
     case kConnected: {
       if (seg->header.type == kFin) {
-        tcb->state = kCloseWait;
+        SegBufPtr fin_ack = CreateSegmentBuffer(tcb, kFinAck);
+        SnpSendSegment(overlay_conn, fin_ack);
+        SDEBUG << "SENT: " << fin_ack << std::endl;
 
-        SegBufPtr seg_buf = CreateSegmentBuffer(tcb, kFinAck);
-        SnpSendSegment(overlay_conn, seg_buf);
-        SDEBUG << "SENT: " << SegToString(seg_buf->segment) << std::endl;
+        tcb->state = kCloseWait;
+        tcb->rcv_nxt += 1;
+
         return 0;
       } else if (seg->header.type == kSyn) {
-        SegBufPtr seg_buf = CreateSegmentBuffer(tcb, kSynAck);
-        SnpSendSegment(overlay_conn, seg_buf);
-        SDEBUG << "SENT: " << SegToString(seg_buf->segment) << std::endl;
+        SegBufPtr syn_ack = CreateSegmentBuffer(tcb, kSynAck);
+        SnpSendSegment(overlay_conn, syn_ack);
+        SDEBUG << "SENT: " << syn_ack << std::endl;
+
+        return 0;
+      } else if (seg->header.type == kData) {
+        if (seg->header.seq != tcb->rcv_nxt)
+          break;
+
+        tcb->rcv_nxt += seg_buf->data_size;
+
+        SegBufPtr data_ack = CreateSegmentBuffer(tcb, kDataAck);
+        SnpSendSegment(overlay_conn, data_ack);
+        SDEBUG << "SENT: " << data_ack << std::endl;
+
+        tcb->recv_buffer.PushBack(seg_buf);
+        tcb->waiting.notify_one();
+
         return 0;
       }
 
@@ -161,9 +179,9 @@ static int Input(SegBufPtr seg_buf) {
      if (seg->header.type != kFin)
        break;
    
-     SegBufPtr seg_buf = CreateSegmentBuffer(tcb, kFinAck);
-     SnpSendSegment(overlay_conn, seg_buf);
-     SDEBUG << "SENT: " << SegToString(seg_buf->segment) << std::endl;
+     SegBufPtr fin_ack = CreateSegmentBuffer(tcb, kFinAck);
+     SnpSendSegment(overlay_conn, fin_ack);
+     SDEBUG << "SENT: " << fin_ack << std::endl;
      return 0;           
    }
    default:
@@ -177,6 +195,9 @@ static int Input(SegBufPtr seg_buf) {
 
 int SrtServerAccept(int sockfd) {
   std::shared_ptr<ServerTcb> tcb = tcb_table[sockfd];
+  if (tcb == nullptr)
+    return -1;
+
   tcb->state = kListening;
 
   // Blocked until input notify that the state is connected
@@ -189,12 +210,40 @@ int SrtServerAccept(int sockfd) {
   return 0;
 }
 
+
+size_t SrtServerRecv(int sockfd, void *buffer, unsigned int length) {
+  std::shared_ptr<ServerTcb> tcb = tcb_table[sockfd]; 
+  if (tcb == nullptr)
+    return -1;
+
+  std::unique_lock<std::mutex> lk(tcb->lock);
+
+  size_t recved = 0;
+  while (recved < length) {
+    tcb->waiting.wait(lk,
+      [&tcb] {
+        return !tcb->recv_buffer.Empty();
+      });
+
+    while (!tcb->recv_buffer.Empty()) {
+      SegBufPtr seg_buf = tcb->recv_buffer.Front();
+      tcb->recv_buffer.Pop();
+
+      memcpy((char *)buffer + recved, seg_buf->segment->data, seg_buf->data_size);
+  
+      recved += seg_buf->data_size;
+    }
+  }
+
+  return recved;
+}
+
 static void InputFromIp() {
   while (running) {
     SegBufPtr seg_buf = SnpRecvSegment(overlay_conn);
 
     if (seg_buf != nullptr) {
-      SDEBUG << "RECV: " << SegToString(seg_buf->segment) << std::endl;
+      SDEBUG << "RECV: " << seg_buf << std::endl;
       Input(seg_buf);
     }
   }
@@ -235,6 +284,3 @@ void SrtServerShutdown() {
   input_thread->join();
 }
 
-size_t SrtServerRecv(int sockfd, void *buffer, unsigned int length) {
-  return 0;
-}

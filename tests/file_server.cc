@@ -67,6 +67,7 @@ int test() {
     std::cerr << "Recv #1 failed, unexpected content received, expected " << expected_len << " got " << len << std::endl;
     exit(-1);
   }
+  //std::cerr << "Get " << len << std::endl;
 
   char buf[5000];
   size_t recved2 = SrtServerRecv(sockfd, buf, expected_len);
@@ -78,10 +79,12 @@ int test() {
   buf[recved2] = 0;
   if (strcmp(buf, str.c_str()) != 0) {
     std::cerr << "Recv #2 failed, unexpected content received, expected " << std::endl;
+  } else {
+    std::cerr << "Recv #2 succeed. correct file content." << std::endl;
   }
+  //std::cerr << "Get " << buf << std::endl;
 
-  sleep(100);
-
+  sleep(10);
 
   if(SrtServerClose(sockfd) < 0) {
     std::cerr << "fail to close srt server" << std::endl;

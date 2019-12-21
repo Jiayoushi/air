@@ -1,6 +1,7 @@
 #ifndef AIR_SEG_H_
 #define AIR_SEG_H_
 
+#include <iostream>
 #include <memory>
 #include <vector>
 #include <chrono>
@@ -29,10 +30,7 @@ struct SegmentHeader {
 
 struct Segment {
   SegmentHeader header;
-  char *data;
-
-  Segment(): data(nullptr) {}
-  ~Segment() { delete [] data; }
+  char data[kMss];
 };
 
 typedef std::chrono::milliseconds Timepoint;
@@ -43,12 +41,13 @@ typedef std::chrono::milliseconds Timepoint;
 struct SegmentBuffer {
   std::shared_ptr<Segment> segment;
   
-  uint32_t data_size; /* Size of the payload, not including header */
+  uint32_t data_size;                 /* Size of the payload, not including header */
 
-  Timepoint send_time; /* Last time this segment was sent */
+  Timepoint send_time;                /* Last time this segment was sent */
+  Timepoint acked_time;               /* The first time this segment was acked */
 
   SegmentBuffer(std::shared_ptr<Segment> s=nullptr, uint32_t size=0):
-   segment(s), data_size(size), send_time() {}
+   segment(s), data_size(size), send_time(), acked_time() {}
 };
 
 typedef std::shared_ptr<Segment> SegPtr;
@@ -75,9 +74,12 @@ bool ValidChecksum(std::shared_ptr<Segment> seg, uint32_t size);
 
 std::string SegToString(std::shared_ptr<Segment> seg);
 
+inline std::ostream &operator<<(std::ostream &out, SegBufPtr seg_buf) {
+  out << SegToString(seg_buf->segment);
 
+  out << ", data_size=" << seg_buf->data_size;
 
-
-
+  return out;
+}
 
 #endif

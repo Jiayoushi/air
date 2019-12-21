@@ -1,8 +1,10 @@
 #ifndef AIR_COMMON_H_
 #define AIR_COMMON_H_
 
-#include <iostream>
 #include <assert.h>
+#include <iostream>
+#include <cstddef>
+
 
 #define DEBUG_ENABLE
 

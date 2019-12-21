@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <cstring>
 #include <thread>
+#include <algorithm>
 #include <queue>
 #include <iterator>
 #include <mutex>
@@ -25,8 +26,6 @@
 #define kConnected       2
 #define kFinWait         3
 
-#define kMaxFinRetry     3
-#define kMaxSynRetry     3
 #define kMaxConnection   1024
 
 
@@ -104,7 +103,7 @@ int SrtClientSock(uint32_t src_port) {
   return -1;
 }
 
-static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, enum SegmentType type, void *data=nullptr, uint32_t data_size=0) {
+static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, enum SegmentType type, const void *data=nullptr, uint32_t data_size=0) {
   SegPtr seg = std::make_shared<Segment>();
 
   seg->header.src_port = tcb->src_port;
@@ -114,12 +113,13 @@ static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, enum SegmentType type, void *da
   seg->header.type = type;
   seg->header.rcv_win = tcb->rcv_win;
   seg->header.ack = (type == kSyn) ? 0 : tcb->rcv_nxt;
-  seg->header.checksum = Checksum(seg, data_size + sizeof(SegmentHeader));
+  seg->header.checksum = 0;
 
-  if (data) {
-    seg->data = new char[data_size];
+  if (data != nullptr) {
     memcpy(seg->data, data, data_size);
   }
+
+  seg->header.checksum = Checksum(seg, data_size + sizeof(SegmentHeader));
 
   return std::make_shared<SegmentBuffer>(seg, data_size);
 }
@@ -138,9 +138,6 @@ int SrtClientConnect(int sockfd, uint32_t dest_port) {
   std::unique_lock<std::mutex> lk(tcb->lock);
 
   /* Create Syn Segment and push it back to the sender buffer */
-  if (tcb->send_buffer.Full())
-    return -1;
-
   tcb->dest_port = dest_port;
   SegBufPtr syn_buf = CreateSegmentBuffer(tcb, kSyn);
   tcb->send_buffer.PushBack(syn_buf);
@@ -163,7 +160,6 @@ int SrtClientConnect(int sockfd, uint32_t dest_port) {
   /* Connection timed out */
   tcb->state = kClosed;
   tcb->snd_nxt = tcb->iss;
-  tcb->send_buffer.Clear();
 
   return -1;
 }
@@ -180,8 +176,6 @@ int SrtClientDisconnect(int sockfd) {
 
   std::unique_lock<std::mutex> lk(tcb->lock);
 
-  if (tcb->send_buffer.Full())
-    return -1;
   SegBufPtr seg_buf = CreateSegmentBuffer(tcb, kFin);
   tcb->send_buffer.PushBack(seg_buf);
 
@@ -200,11 +194,39 @@ int SrtClientDisconnect(int sockfd) {
   /* Timed out */
   tcb->state = kConnected;
   tcb->snd_nxt--;
-  tcb->send_buffer.Clear();
   
   CDEBUG << "Disconnect max retry reached" << std::endl;
 
   return -1; 
+}
+
+size_t SrtClientSend(int sockfd, const void *data, uint32_t length) {
+  std::shared_ptr<ClientTcb> tcb = tcb_table[sockfd];
+  if (tcb == nullptr)
+    return -1;
+
+
+  std::unique_lock<std::mutex> lk(tcb->lock);
+
+  std::vector<SegBufPtr> bufs;
+
+  const char *p = (const char *)data;
+  size_t seg_len = length;
+
+  while (seg_len > 0) {
+    size_t size = std::min(seg_len, kMss);
+
+    SegBufPtr seg_buf = CreateSegmentBuffer(tcb, kData, p, size);
+
+    bufs.push_back(seg_buf);
+    tcb->send_buffer.PushBack(seg_buf);
+ 
+    tcb->snd_nxt += size;
+    p += size;
+    seg_len -= size;
+  }
+
+  return length;
 }
 
 // Destination port number, the source IP address, and the source port number.
@@ -250,6 +272,9 @@ static int Input(SegBufPtr seg_buf) {
 
       size_t acked = tcb->send_buffer.Ack(seg->header.ack);
       CDEBUG << "ACKED: " << acked << std::endl;
+      if (acked == 0)
+        break;
+
       tcb->send_buffer.SendUnsent();
 
 	  tcb->state = kConnected;
@@ -260,7 +285,17 @@ static int Input(SegBufPtr seg_buf) {
       return 0;
     }
     case kConnected: {
-      break;
+      if (seg->header.type != kDataAck)
+        break;
+
+      size_t acked = tcb->send_buffer.Ack(seg->header.ack);
+      CDEBUG << "ACKED: " << acked << std::endl;
+      if (acked == 0)
+        break;
+
+      tcb->send_buffer.SendUnsent();
+
+      return 0;
     }
     case kFinWait: {
       if (seg->header.type != kFinAck)
@@ -291,7 +326,7 @@ static void InputFromIp() {
       break;
 
     if (seg_buf != nullptr) {
-      CDEBUG << "RECV: " << SegToString(seg_buf->segment) << std::endl;
+      CDEBUG << "RECV: " << seg_buf << std::endl;
       Input(seg_buf);
     }
   }
@@ -306,6 +341,7 @@ static void Timeout() {
 
       if (tcb->send_buffer.Timeout()) {
         if (tcb->send_buffer.MaxRetryReached()) {
+          tcb->send_buffer.PopUnsentFront();
           tcb->waiting.notify_one();
           continue;
         }
@@ -350,6 +386,3 @@ void SrtClientShutdown() {
   input_thread->join();
 }
 
-int SrtClientSend(int sockfd, const void *data, uint32_t length) {
-  return 0;
-}

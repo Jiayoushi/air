@@ -52,7 +52,10 @@ int test() {
                    std::istreambuf_iterator<char>());
 
   size_t len = strlen(str.c_str());
-  SrtClientSend(sockfd, &len, sizeof(size_t));
+  uint32_t k = sizeof(size_t);
+
+  SrtClientSend(sockfd, &len, k);
+
   std::cerr << "len sent: " << len << std::endl;
   SrtClientSend(sockfd, str.c_str(), len);
   std::cerr << "file sent." << std::endl;

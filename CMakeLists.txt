@@ -10,6 +10,7 @@ add_library(common_lib
             src/common/seg.cc
             src/common/timer.cc
             src/common/send_buffer.cc
+            src/common/recv_buffer.cc
             src/client/srt_client.cc
             src/server/srt_server.cc
             src/client/srt_client_overlay.cc
@@ -26,11 +27,11 @@ add_executable(file_client
 add_executable(file_server
                tests/file_server.cc)
 
-target_compile_options(air_client PRIVATE -Wall)
-target_compile_options(air_server PRIVATE -Wall)
-target_compile_options(unit_test PRIVATE -Wall)
-target_compile_options(file_client PRIVATE -Wall)
-target_compile_options(file_server PRIVATE -Wall)
+target_compile_options(air_client PRIVATE -Wall -Wuninitialized)
+target_compile_options(air_server PRIVATE -Wall -Wuninitialized)
+target_compile_options(unit_test PRIVATE -Wall -Wuninitialized)
+target_compile_options(file_client PRIVATE -Wall -Wuninitialized)
+target_compile_options(file_server PRIVATE -Wall -Wuninitialized)
 
 target_link_libraries(air_client common_lib Threads::Threads)
 target_link_libraries(air_server common_lib Threads::Threads)

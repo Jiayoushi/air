@@ -17,9 +17,8 @@
 class SendBuffer {
  private:
   const uint32_t kOverlayConn;
-  uint32_t retry;
+  uint32_t retry_;
 
-  std::unordered_set<uint32_t> seq_nums_;
   std::list<SegBufPtr> unacked_;
   std::list<SegBufPtr> unsent_;
 
@@ -27,7 +26,7 @@ class SendBuffer {
  public:
   SendBuffer(uint32_t overlay_conn):
     kOverlayConn(overlay_conn),
-    seq_nums_(),
+    retry_(0),
     unacked_(),
     unsent_() {}
 
@@ -37,6 +36,7 @@ class SendBuffer {
   uint32_t SendUnsent();
   size_t Ack(uint32_t);
   void Clear();
+  void PopUnsentFront();
 
   bool Full() const;
   bool Timeout() const;
@@ -44,8 +44,7 @@ class SendBuffer {
 };
 
 inline void SendBuffer::Clear() {
-  retry = 0;
-  seq_nums_.clear();
+  retry_ = 0;
   unacked_.clear();
   unsent_.clear();
 }
@@ -55,7 +54,7 @@ inline bool SendBuffer::Full() const {
 }
 
 inline bool SendBuffer::MaxRetryReached() const {
-  return retry == kMaxSynRetry;
+  return retry_ == kMaxSynRetry;
 }
 
 #endif
