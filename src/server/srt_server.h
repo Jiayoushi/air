@@ -15,7 +15,7 @@ int SrtServerSock(unsigned int server_port);
 
 int SrtServerAccept(int sockfd);
 
-int SrtServerRecv(int sockfd, void *buffer, unsigned int length);
+size_t SrtServerRecv(int sockfd, void *buffer, unsigned int length);
 
 int SrtServerClose(int sockfd);
 

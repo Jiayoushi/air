@@ -350,6 +350,6 @@ void SrtClientShutdown() {
   input_thread->join();
 }
 
-int SrtClientSend(int sockfd, void *data, uint32_t length) {
+int SrtClientSend(int sockfd, const void *data, uint32_t length) {
   return 0;
 }

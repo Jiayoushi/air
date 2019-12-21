@@ -235,6 +235,6 @@ void SrtServerShutdown() {
   input_thread->join();
 }
 
-int SrtServerRecv(int sockfd, void *buffer, unsigned int length) {
+size_t SrtServerRecv(int sockfd, void *buffer, unsigned int length) {
   return 0;
 }
