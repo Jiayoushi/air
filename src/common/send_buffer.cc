@@ -3,7 +3,7 @@
 #include "common.h"
 
 int SendBuffer::PushBack(SegBufPtr seg_buf) {
-  if (unsent_.size() == kUnsentCapacity)
+  if (Full())
     return -1;
 
   unsent_.push_back(seg_buf);
@@ -50,7 +50,7 @@ void SendBuffer::SendTopUnsent() {
 
 uint32_t SendBuffer::SendUnsent() {
   uint32_t count = 0;
-  while (!unsent_.empty() && unacked_.size() < kGbnWindowSize) {
+  while (!unsent_.empty()) {
     SendTopUnsent();
     ++count;
   }
