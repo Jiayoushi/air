@@ -50,7 +50,7 @@ inline void SendBuffer::Clear() {
 }
 
 inline bool SendBuffer::Full() const {
-  return unsent_.size() == kUnsentCapacity;
+  return unacked_.size() + unsent_.size() == kGbnWindowSize;
 }
 
 inline bool SendBuffer::MaxRetryReached() const {

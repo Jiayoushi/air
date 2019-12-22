@@ -2,5 +2,7 @@
 
 Status: [ONGOING]
 
-
-- two-way handshake
+TODO:
+- fix window size
+- two-way handshake -> three-way
+- 
