@@ -318,12 +318,21 @@ static int Input(SegBufPtr seg_buf) {
   return -1;
 }
 
+static void CleanUp() {
+  for (int i = 0; i < kMaxConnection; ++i) {
+    tcb_table[i] = nullptr;
+  }
+  CDEBUG << "Exit" << std::endl;
+}
+
 static void InputFromIp() {
   while (1) {
     SegBufPtr seg_buf = SnpRecvSegment(overlay_conn);
 
-    if (!running)
+    if (!running) {
+      CleanUp();
       break;
+    }
 
     if (seg_buf != nullptr) {
       CDEBUG << "RECV: " << seg_buf << std::endl;
@@ -363,8 +372,6 @@ void SrtClientInit(int conn) {
   timeout_thread = std::make_shared<std::thread>(Timeout);
 }
 
-
-
 int SrtClientClose(int sockfd) {
   tcb_table_lock.lock();
   tcb_table[sockfd] = nullptr;
@@ -372,8 +379,6 @@ int SrtClientClose(int sockfd) {
 
   return 0;
 }
-
-
 
 static void NotifyShutdown() {
   running = false;
@@ -385,4 +390,3 @@ void SrtClientShutdown() {
   timeout_thread->join();
   input_thread->join();
 }
-

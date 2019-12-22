@@ -82,7 +82,6 @@ int test() {
   } else {
     std::cerr << "Recv #2 succeed. correct file content." << std::endl;
   }
-  //std::cerr << "Get " << buf << std::endl;
 
   sleep(10);
 
@@ -91,7 +90,11 @@ int test() {
     exit(-1);
   }
 
+  SrtServerShutdown();
+
   OverlayServerStop(conn);
+
+  std::cerr << "Server exits" << std::endl;
 
   return 0;
 }

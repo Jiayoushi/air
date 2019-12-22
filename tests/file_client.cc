@@ -66,13 +66,19 @@ int test() {
     std::cerr << "fail to disconnect from srt server" << std::endl;
     exit(1);
   }
+  std::cerr << "Disconnected" << std::endl;
 
   if(SrtClientClose(sockfd) < 0) {
     std::cerr << "fail to close srt client" << std::endl;
     exit(-1);
   }
+  std::cerr << "Client closed" << std::endl;
+
+  SrtClientShutdown();
+  std::cerr << "Client shutdown" << std::endl;
 
   OverlayClientStop(conn);
+  std::cerr << "Overlay stopped" << std::endl;
 
   return 0;
 }
