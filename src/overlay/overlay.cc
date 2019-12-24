@@ -13,7 +13,7 @@ NeighborTable nt;
 int listen_fd = -1;
 int network_conn = -1;
 
-std::atomic<bool> running = false;
+static std::atomic<bool> running = false;
 
 static void AcceptNeighbors() {
   int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -23,7 +23,7 @@ static void AcceptNeighbors() {
   }
 
   int optval = 1;
-  setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR,
+  setsockopt(listen-fd, SOL_SOCKET, SO_REUSEADDR,
          (const void *)&optval , sizeof(int));
 
   struct sockaddr_in server_addr;
@@ -39,7 +39,7 @@ static void AcceptNeighbors() {
     exit(-1);
   }
 
-  if (listen(listen_fd, 5000) < 0) {
+  if (listen(listen_fd, kMaxHostNum) < 0) {
     perror("Error: listen failed");
     exit(-1);
   }
@@ -67,8 +67,8 @@ static int ConnectNeighbors() {
     if (nt[i].ip > nt.GetLocalIp())
       continue;
 
-    int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (listen_fd < 0) {
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) {
       perror("Error: cannot create socket");
       exit(-1);
     }
@@ -83,7 +83,7 @@ static int ConnectNeighbors() {
     struct timeval tv;
     tv.tv_sec = 1;
     tv.tv_usec = 0;
-    setsockopt(listen_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 
     struct sockaddr_in server_addr;
     bzero((char *)&server_addr, sizeof(server_addr));
@@ -92,26 +92,26 @@ static int ConnectNeighbors() {
           (char *)&server_addr.sin_addr.s_addr, server->h_length);
     server_addr.sin_port = htons(hostport);
   
-    if (connect(listen_fd, (const struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+    if (connect(sockfd, (const struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
       std::cerr << "Error: connect failed" << std::endl;
       exit(-1);
     }
 
-    nt.AddConnection(nt[i]->ip, listen_fd);
+    nt.AddConnection(nt[i]->ip, sockfd);
   }
  
   return 0; 
 }
 
 static int AcceptNetwork() {
-  int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
-  if (listen_fd < 0) {
+  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (sockfd < 0) {
     perror("Error: cannot create socket");
     exit(-1);
   }
 
   int optval = 1;
-  setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR,
+  setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR,
          (const void *)&optval , sizeof(int));
 
   struct sockaddr_in server_addr;
@@ -121,19 +121,19 @@ static int AcceptNetwork() {
   server_addr.sin_addr.s_addr = htonl(nt.GetLocalIp());
   server_addr.sin_port = htons(kOverlayPort);
 
-  if (bind(listen_fd, (const struct sockaddr *)&server_addr, 
+  if (bind(sockfd, (const struct sockaddr *)&server_addr, 
            sizeof(server_addr)) < 0) {
     perror("Error: bind failed");
     exit(-1);
   }
 
-  if (listen(listen_fd, 1) < 0) {
+  if (listen(sockfd, 1) < 0) {
     perror("Error: listen failed");
     exit(-1);
   }
 
   int conn_fd = 0;
-  if ((conn_fd = accept(listen_fd, (struct sockaddr *)&server_addr,
+  if ((conn_fd = accept(sockfd, (struct sockaddr *)&server_addr,
                         &size)) < 0) {
     perror("Error: accept");
     exit(-1);
@@ -205,7 +205,7 @@ static void Input(int index) {
 
 int OverlayStop() {
   running = false;
-  if (close(listen_fd) < 0)
+  if (close(sockfd) < 0)
     return -1;
 
   return 0;
