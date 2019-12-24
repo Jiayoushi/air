@@ -10,7 +10,9 @@
 #define kUnsentCapacity                 100
 #define kMaxSynRetry                    100
 
-const size_t kMss = 512;
+const size_t kMss           = 512;
+const size_t kMaxPacketData = 512;
+const size_t kMaxHostNum    = 1024;
 
 /* Timeout */
 #define kTimeoutIntervalInMs            6000

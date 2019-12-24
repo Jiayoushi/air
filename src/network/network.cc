@@ -17,7 +17,6 @@ int IpConnectOverlay() {
 int main() {
   std::cout << "[IP] network layer starting ..." << std::endl;
 
-
   int overlay_conn = IpConnectOverlay();
   if (overlay_conn < 0) {
     std::cerr << "[IP] connect overlay failed" << std::endl;
