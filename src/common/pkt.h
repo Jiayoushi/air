@@ -8,8 +8,10 @@
 /*
  * Packet
  */
-struct PacketHeader;
+struct Packet;
+struct PacketBuffer;
 typedef std::shared_ptr<Packet> PktPtr;
+typedef std::shared_ptr<PacketBuffer> PktBufPtr;
 typedef in_addr_t Ip;
 typedef uint32_t cost;
 
@@ -32,6 +34,13 @@ struct Packet {
   char data[kMaxPacketData];
 };
 
+struct PacketBuffer {
+  Packet pkt;
+
+  /* Source ip when this packet is received from other hosts
+   * dest ip when this packet is received from tranposrt layer */
+  Ip ip;  
+};
 
 /*
  * Routing Update
@@ -45,7 +54,6 @@ struct RouteUpdate {
   uint32_t entry_count;
   RouteTableEntry entry[kMaxHostNum];
 };
-
 
 
 int SendPacket(PktPtr pkt, int conn);

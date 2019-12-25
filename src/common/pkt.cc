@@ -9,7 +9,7 @@ int SendPacket(PktPtr pkt, int conn) {
     return -1;
   }
 
-  if (send(connection, pkt->get(), pkt->, 0) < 0) {
+  if (send(connection, pkt->get(), pkt->length, 0) < 0) {
     perror("[PKT] SendPacket failed to send packet");
     return -1;
   }

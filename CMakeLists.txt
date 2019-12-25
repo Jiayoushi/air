@@ -26,6 +26,10 @@ add_executable(file_client
                tests/file_client.cc)
 add_executable(file_server
                tests/file_server.cc)
+add_executable(network
+               src/network/network.cc)
+add_executable(overlay
+               src/overlay/overlay.cc)
 
 target_compile_options(air_client PRIVATE -Wall -Wuninitialized)
 target_compile_options(air_server PRIVATE -Wall -Wuninitialized)

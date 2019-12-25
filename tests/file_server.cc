@@ -15,14 +15,31 @@ int main() {
   return test();
 }
 
+
+void ConnectNetwork() {
+  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (sockfd < 0) {
+    perror("Error: cannot create socket");
+    exit(-1);
+  }
+
+  struct sockaddr_in network_addr;
+  bzero((char *)&network_addr, sizeof(network_addr));
+  network_addr.sin_family = AF_INET;
+  bcopy((char *)server->h_addr,
+        (char *)&network_addr.sin_addr.s_addr, server->h_length);
+  network_addr.sin_port = htons(hostport);
+
+  if (connect(sockfd, (const struct sockaddr *)&network_addr, sizeof(network_addr)) < 0) {
+    std::cerr << "Error: connect failed" << std::endl;
+    exit(-1);
+  }
+}
+
 int test() {
   srand(time(nullptr));
 
-  int conn = OverlayServerStart("127.0.0.1", kServerPort);
-  if (conn < 0) {
-    std::cerr << "overlay_start failed" << std::endl;
-    exit(-1);
-  }
+  ConnectNetwork();
 
   SrtServerInit(conn);
 
@@ -67,7 +84,6 @@ int test() {
     std::cerr << "Recv #1 failed, unexpected content received, expected " << expected_len << " got " << len << std::endl;
     exit(-1);
   }
-  //std::cerr << "Get " << len << std::endl;
 
   char buf[5000];
   size_t recved2 = SrtServerRecv(sockfd, buf, expected_len);
@@ -92,7 +108,7 @@ int test() {
 
   SrtServerShutdown();
 
-  OverlayServerStop(conn);
+  NetworkStop();
 
   std::cerr << "Server exits" << std::endl;
 

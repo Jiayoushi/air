@@ -1,0 +1,9 @@
+#!/bin/bash
+
+set -e
+
+exe=$1
+
+./overlay
+./network
+./$exe

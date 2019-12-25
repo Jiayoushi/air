@@ -18,7 +18,7 @@
 #define kSegmentError         1
 #define kSegmentIntact        2
 
-int SnpSendSegment(int connection, SegBufPtr seg_buf) {
+int SnpSendSegment(int connection, Ip dest_ip, SegBufPtr seg_buf) {
   assert(seg_buf != nullptr);
   assert(seg_buf->segment != nullptr);
 
