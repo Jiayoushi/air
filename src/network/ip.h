@@ -3,15 +3,9 @@
 
 extern Ip local_ip;
 
-int IpSend(SegBufPtr);
-
-// TODO
-int IpForward();
-
+int IpSend(SegBufPtr seg_buf);
 void IpStop();
-
 Ip GetLocalIp();
-
 
 int IpInputQueuePush(PktBufPtr pkt_buf);
 PktBufPtr IpInputQueuePop();

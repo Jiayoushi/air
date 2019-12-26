@@ -1,10 +1,9 @@
 #include "air.h"
 
-
 int Init() {
-  TcpInit();
+  OverlayInit();
   IpInit();
-  SrtServerInit();
+  TcpInit();
 }
 
 int Stop() {

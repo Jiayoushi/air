@@ -40,16 +40,16 @@ typedef std::chrono::milliseconds Timepoint;
  */
 struct SegmentBuffer {
   SegPtr segment;
- 
-  Ip ip;                              
- 
   uint32_t data_size;                 /* Size of the payload, not including header */
+
+  Ip src_ip;
+  Ip dest_ip;
 
   Timepoint send_time;                /* Last time this segment was sent */
   Timepoint acked_time;               /* The first time this segment was acked */
 
-  SegmentBuffer(std::shared_ptr<Segment> s=nullptr, uint32_t size=0, i=0):
-   segment(s), ip(i), data_size(size), send_time(), acked_time() {}
+  SegmentBuffer(std::shared_ptr<Segment> s=nullptr, uint32_t size=0, sip=0, dip=0):
+   segment(s), data_size(size), src_ip(i), dest_ip(i), send_time(), acked_time() {}
 };
 
 typedef std::shared_ptr<Segment> SegPtr;

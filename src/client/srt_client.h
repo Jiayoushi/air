@@ -6,7 +6,7 @@
 void SrtClientInit(int conn);
 void SrtClientShutdown();
 
-int SrtClientSock(unsigned int client_port);
+int SrtClientSock(Ip ip, unsigned int port);
 int SrtClientClose(int sockfd);
 
 size_t SrtClientSend(int sockfd, const void *data, unsigned int length);

@@ -22,10 +22,10 @@ static uint32_t overlay_conn;
 
 // Server transport control block.
 struct ServerTcb {
-  unsigned int src_id;
+  ip src_ip;
   unsigned int src_port;
 
-  unsigned int dest_id;
+  Ip dest_ip;
   unsigned int dest_port;
 
   unsigned int state;
@@ -42,7 +42,7 @@ struct ServerTcb {
 
   RecvBuffer recv_buffer;
 
-  ServerTcb(): src_id(0), src_port(0), dest_id(0),
+  ServerTcb(): src_ip(0), src_port(0), dest_ip(0),
     dest_port(0), state(kClosed),
     iss(100), //rand() % std::numeric_limits<unsigned int>::max()),
     snd_nxt(iss + 1),
@@ -63,15 +63,21 @@ static std::atomic<bool> running;
 
 std::shared_ptr<std::thread> input_thread;
 
-
-// TODO
-std::shared_ptr<ServerTcb> Demultiplex(std::shared_ptr<Segment> seg) {
+std::shared_ptr<ServerTcb> Demultiplex(SegBufPtr seg_buf) {
   for (int tcb_id = 0; tcb_id < kMaxConnection; ++tcb_id) {
     if (tcb_table[tcb_id] == nullptr)
       continue;
 
-    if ((seg->header.type == kSyn && seg->header.dest_port == tcb_table[tcb_id]->src_port) ||
-        (seg->header.src_port == tcb_table[tcb_id]->dest_port && seg->header.dest_port == tcb_table[tcb_id]->src_port))
+    /* Accept new connection */
+    if (tcb_table[tcb_id]->state == kListening &&
+        seg_buf->segment->header.type == kSyn &&
+        seg->header.dest_port == tcb_table[tcb_id]->src_port)
+      return tcb_table[tcb_id];
+
+    /* Normal case */
+    if (seg_buf->segment->header.src_port == tcb_table[tcb_id]->dest_port &&
+        seg_buf->segment->header.dest_port == tcb_table[tcb_id]->src_port &&
+        seg_buf->ip == tcb_table[tcb_id]->dest_ip)
     return tcb_table[tcb_id];
   }
 
@@ -87,7 +93,7 @@ static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, enum SegmentType type, const vo
   if (type == kSynAck)
     seg->header.seq = tcb->iss + 1;
   else
-    seg->header.seq = 0; //tcb->snd_nxt;
+    seg->header.seq = 0;
 
   seg->header.length = sizeof(SegmentHeader);
   seg->header.type = type;
@@ -100,7 +106,7 @@ static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, enum SegmentType type, const vo
 
   seg->header.checksum = Checksum(seg, len + sizeof(SegmentHeader));
 
-  return std::make_shared<SegmentBuffer>(seg, len);
+  return std::make_shared<SegmentBuffer>(seg, len, tcb->src_ip, tcb->dest_ip);
 }
 
 static int Input(SegBufPtr seg_buf) {
@@ -111,7 +117,7 @@ static int Input(SegBufPtr seg_buf) {
     return -1;
   }
 
-  std::shared_ptr<ServerTcb> tcb = Demultiplex(seg);
+  std::shared_ptr<ServerTcb> tcb = Demultiplex(seg_buf);
   if (tcb == nullptr) {
     SDEBUG << "No matching tcb" << std::endl;
     return -1;
@@ -127,8 +133,9 @@ static int Input(SegBufPtr seg_buf) {
       if (seg->header.type != kSyn)
         return -1;
 
-      tcb->rcv_nxt = seg->header.seq + 1;
+      tcb->dest_ip = seg_buf->ip;
       tcb->dest_port = seg->header.src_port;
+      tcb->rcv_nxt = seg->header.seq + 1;
 
       SegBufPtr syn_ack = CreateSegmentBuffer(tcb, kSynAck);
       SnpSendSegment(overlay_conn, syn_ack);

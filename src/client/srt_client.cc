@@ -33,14 +33,14 @@
  * Client transport control block, the client side of a SRT connection
  * uses this data structure to keep track of connection information
  *
- * The dest_id serves as the purpose of 'ip address' when demultiplexing.
+ * The dest_ip serves as the purpose of 'ip address' when demultiplexing.
  * Current implementation supports data segments flow from client to server.
  *
  */
 struct ClientTcb {
-  uint32_t src_id;
+  uint32_t src_ip;
   uint32_t src_port;
-  uint32_t dest_id;
+  uint32_t dest_ip;
   uint32_t dest_port;
 
   uint32_t state;
@@ -58,9 +58,9 @@ struct ClientTcb {
   SendBuffer send_buffer; 
 
   ClientTcb(uint32_t overlay_conn): 
-    src_id(0),
+    src_ip(0),
     src_port(0), 
-    dest_id(0),
+    dest_ip(0),
     dest_port(0),
     state(kClosed),
     iss(0),//rand() % std::numeric_limits<uint32_t>::max()),
@@ -87,12 +87,13 @@ const static TimeInterval kTimeoutLoopInterval(500);               /* Time inter
 
 
 
-int SrtClientSock(uint32_t src_port) {
+int SrtClientSock(Ip src_ip, uint32_t src_port) {
   tcb_table_lock.lock();
 
   for (int i = 0; i < kMaxConnection; ++i) {
     if (tcb_table[i] == nullptr) {
       tcb_table[i] = std::make_shared<ClientTcb>(overlay_conn);
+      tcb_table[i]->src_ip = src_ip;
       tcb_table[i]->src_port = src_port;
       tcb_table_lock.unlock();
       return i;
@@ -121,7 +122,7 @@ static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, enum SegmentType type, const vo
 
   seg->header.checksum = Checksum(seg, data_size + sizeof(SegmentHeader));
 
-  return std::make_shared<SegmentBuffer>(seg, data_size);
+  return std::make_shared<SegmentBuffer>(seg, data_size, tcb->src_ip, tcb->dest_ip);
 }
 
 /*
@@ -129,7 +130,7 @@ static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, enum SegmentType type, const vo
  *
  * Return value: -1 on error, 0 on success
  */
-int SrtClientConnect(int sockfd, uint32_t dest_port) {
+int SrtClientConnect(int sockfd, Ip ip, uint32_t dest_port) {
   std::shared_ptr<ClientTcb> tcb = tcb_table[sockfd];
   if (tcb->state != kClosed)
     return -1;
@@ -138,6 +139,7 @@ int SrtClientConnect(int sockfd, uint32_t dest_port) {
   std::unique_lock<std::mutex> lk(tcb->lock);
 
   /* Create Syn Segment and push it back to the sender buffer */
+  tcb->dest_ip = ip;
   tcb->dest_port = dest_port;
   SegBufPtr syn_buf = CreateSegmentBuffer(tcb, kSyn);
   tcb->send_buffer.PushBack(syn_buf);
@@ -229,17 +231,14 @@ size_t SrtClientSend(int sockfd, const void *data, uint32_t length) {
   return length;
 }
 
-// Destination port number, the source IP address, and the source port number.
-
-// TODO: right now id is not used to demultiplex, in theory SrtConnect should
-// also have a server node id field
-static std::shared_ptr<ClientTcb> Demultiplex(std::shared_ptr<Segment> seg) {
+static std::shared_ptr<ClientTcb> Demultiplex(SegBufPtr seg_buf) {
   for (int tcb_id = 0; tcb_id < kMaxConnection; ++tcb_id) {
     if (tcb_table[tcb_id] == nullptr)
       continue;
 
-    if (seg->header.src_port == tcb_table[tcb_id]->dest_port
-     && seg->header.dest_port == tcb_table[tcb_id]->src_port)
+    if (seg_buf->segment->header.src_port == tcb_table[tcb_id]->dest_port &&
+        seg_buf->segment->header.dest_port == tcb_table[tcb_id]->src_port &&
+        seg_buf->ip == tcb_table[tcb_id]->dest_ip)
     return tcb_table[tcb_id];
   }
 
@@ -254,7 +253,7 @@ static int Input(SegBufPtr seg_buf) {
     return -1;
   }
 
-  std::shared_ptr<ClientTcb> tcb = Demultiplex(seg);
+  std::shared_ptr<ClientTcb> tcb = Demultiplex(seg_buf);
   if (tcb == nullptr) {
     CDEBUG << "No matching tcb" << std::endl;
     return -1;

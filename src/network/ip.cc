@@ -15,8 +15,11 @@ int IpSend(SegBufPtr seg_buf) {
 
   pkt_buf->pkt.header.src_ip = local_ip;
   pkt_buf->pkt.header.dest_ip = seg_buf.ip;
-  pkt_buf->pkt.length = sizeof(PacketHeader) + sizeof(SegmentHeader) +
-                        seg_buf->data_size;
+  pkt_buf->pkt.length = sizeof(PacketHeader) + sizeof(SegmentHeader)
+                        + seg_buf->data_size;
+
+  // TODO:
+  pkt_buf->next_hop = 0;
 
   OverlaySend(pkt_buf);
 }
@@ -45,9 +48,10 @@ PktBufPtr IpInputQueuePop() {
   return ip_input.Pop();
 }
 
-static int ForwardPacket(PktBufPtr pkt_buf) {
+static int Forward(PktBufPtr pkt_buf) {
   SegBufPtr seg_buf = std::make_shared<SegmentBuffer>();
-  seg_buf->ip = pkt_buf->src_ip;
+  seg_buf->src_ip = pkt_buf->packet->src_ip;
+  seg_buf->dest_ip = pkt_buf->packet->dest_ip;
   seg_buf->data_size = pkt_buf->length - sizeof(PacketHeader)
                        - sizeof(SegmentHeader);
   seg_buf->segment = std::make_shared<Segment>();

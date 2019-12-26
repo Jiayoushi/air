@@ -94,8 +94,7 @@ int test() {
   }
 
   Stop();
-
-  std::cerr << "Server exits" << std::endl;
+  std::cerr << "Server stopped" << std::endl;
 
   return 0;
 }

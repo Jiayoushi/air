@@ -37,9 +37,7 @@ struct Packet {
 struct PacketBuffer {
   PktPtr pkt;
 
-  /* Source ip when this packet is received from other hosts
-   * dest ip when this packet is received from tranposrt layer */
-  Ip ip;  
+  Ip next_hop;
 };
 
 /*

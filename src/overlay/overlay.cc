@@ -103,19 +103,19 @@ static int ConnectNeighbors() {
   return 0; 
 }
 
-int OverlaySend(PktPtr pkt) {
+int OverlaySend(PktBufPtr pkt_buf) {
   const char *pkt_start = "!&";
   const char *pkt_end = "!#";
 
-  int connection = 
-
+  int connection = nt[pkt_buf->next_hop].conn;
 
   if (send(connection, pkt_start, 2, 0) < 0) {
     perror("[PKT] SendPacket failed to send pkt_start");
     return -1;
   }
 
-  if (send(connection, pkt.get(), pkt->header.length, 0) < 0) {
+  if (send(connection, pkt_buf->packet.get(), 
+           pkt_buf->packet.header.length, 0) < 0) {
     perror("[PKT] SendPacket failed to send packet");
     return -1;
   }
@@ -128,8 +128,60 @@ int OverlaySend(PktPtr pkt) {
   return 0;
 }
 
-PktPtr OverlayRecvPacket(int conn) {
-  return RecvPacket(conn);
+static PktPtr OverlayRecv(int conn) {
+  char buf[65535];
+  memset(buf, 0, 65535);
+
+  uint32_t idx = 0;
+
+  int state = kWaitFirstStart;
+  char c;
+  int recved = 0;
+  while ((recved = recv(conn, &c, 1, 0)) > 0) {
+    switch (state) {
+      case kWaitFirstStart:   // Wait !
+        if (c == '!')
+          state = kWaitSecondStart;
+        break;
+      case kWaitSecondStart:  // Wait &
+        if (c == '&') {
+          state = kWaitFirstEnd;
+        } else {
+          state = kWaitFirstStart;
+        }
+        break;
+      case kWaitFirstEnd:     // Wait !
+        buf[idx++] = c;
+        if (c == '!') {
+          state = kWaitSecondEnd;
+        }
+        break;
+      case kWaitSecondEnd:    // Wait #
+        buf[idx++] = c;
+        // "!#" is received, the segment receiving is complete
+        if (c == '#') {
+          PktPtr pkt = std::make_shared<Packet>();
+ 
+          uint16_t pkt_len = idx - 2;
+          memcpy(pkt.get(), buf, pkt_len);
+          pkt->length = pkt_len;
+
+          return pkt;
+        } else if (c == '!') {
+          // Previous '!' is not end control character
+          // This one might be, so still wait for '#'
+        } else {
+          // Previous '!' is definitely not end control character
+          // Go back to previous state to wait for first end control character
+          state = kWaitFirstEnd;
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  return nullptr;
 }
 
 /*
