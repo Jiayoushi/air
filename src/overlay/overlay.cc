@@ -103,59 +103,19 @@ static int ConnectNeighbors() {
   return 0; 
 }
 
-static int AcceptNetwork() {
-  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-  if (sockfd < 0) {
-    perror("Error: cannot create socket");
-    exit(-1);
-  }
-
-  int optval = 1;
-  setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR,
-         (const void *)&optval , sizeof(int));
-
-  struct sockaddr_in server_addr;
-  bzero((char *) &server_addr, sizeof(server_addr));
-
-  server_addr.sin_family = AF_INET;
-  server_addr.sin_addr.s_addr = htonl(nt.GetLocalIp());
-  server_addr.sin_port = htons(kOverlayPort);
-
-  if (bind(sockfd, (const struct sockaddr *)&server_addr, 
-           sizeof(server_addr)) < 0) {
-    perror("Error: bind failed");
-    exit(-1);
-  }
-
-  if (listen(sockfd, 1) < 0) {
-    perror("Error: listen failed");
-    exit(-1);
-  }
-
-  int conn_fd = 0;
-  if ((conn_fd = accept(sockfd, (struct sockaddr *)&server_addr,
-                        &size)) < 0) {
-    perror("Error: accept");
-    exit(-1);
-  }
-
-  return conn_fd;
-}
-
-int OverlaySendPacket(Ip next_hop, PktPtr pkt) {
+int OverlaySend(PktPtr pkt) {
   const char *pkt_start = "!&";
   const char *pkt_end = "!#";
+
+  int connection = 
+
 
   if (send(connection, pkt_start, 2, 0) < 0) {
     perror("[PKT] SendPacket failed to send pkt_start");
     return -1;
   }
 
-  OverlayPacket p;
-  p.next_hop = next_hop;
-  memcpy(&p.pkt, pkt.get(), pkt->length);
-
-  if (send(connection, &p, sizeof(OverlayPacket), 0) < 0) {
+  if (send(connection, pkt.get(), pkt->header.length, 0) < 0) {
     perror("[PKT] SendPacket failed to send packet");
     return -1;
   }
@@ -211,27 +171,26 @@ int OverlayStop() {
   return 0;
 }
 
-int main() {
+int OverlayInit() {
   std::cout << "Overlay layer starting ..." << std::endl;
 
+  nt.Init();
   std::cout << "Printing neighbors' ip addresses" << std::endl;
   for (Ip ip: nt.GetNeighbors()) {
     struct in_addr a;
     a.s_addr = ip;
     std::cout << inet_ntoa(a) << std::endl;
   }
-
+  
+  std::cout << "[OVERLAY]: connecting to other hosts" << std::endl;
   // Accept connections from neighbors with larger ip
   std::thread accept_neighbors(AcceptNeighbors);
-
   std::thread connect_neighbors(ConnectNeighbors);
-
   accept_neighbors.join();
   connect_neighbors.join();
 
-  
   /* Connection to other hosts are established */
-  std::cout << "[OVERLAY]: connections to other hosts are established" << std::endl;
+  std::cout << "[OVERLAY]: connections established" << std::endl;
 
   /* Keep receiving packets from neighbors */
   std::vector<std::thread> input_threads;
@@ -242,10 +201,6 @@ int main() {
   std::cout << "[OVERLAY]: overlay started" << std::endl;
   std::cout << "[OVERLAY]: waiting for connections from network layer"
             << std::endl;
-
-  /* Get fd used to communicate with network layer */
-  network_conn = accept_network();
-  std::cout << "[OVERLAY]: connection to network layer established" << std::endl;
 
   while (running)
     std::this_thread::sleep_for(60); 

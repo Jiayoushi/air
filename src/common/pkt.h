@@ -13,7 +13,7 @@ struct PacketBuffer;
 typedef std::shared_ptr<Packet> PktPtr;
 typedef std::shared_ptr<PacketBuffer> PktBufPtr;
 typedef in_addr_t Ip;
-typedef uint32_t cost;
+typedef uint32_t Cost;
 
 
 enum PacketType {
@@ -35,7 +35,7 @@ struct Packet {
 };
 
 struct PacketBuffer {
-  Packet pkt;
+  PktPtr pkt;
 
   /* Source ip when this packet is received from other hosts
    * dest ip when this packet is received from tranposrt layer */

@@ -3,8 +3,9 @@
 
 #include "common/pkt.h"
 
+int OverlayInit();
+int OverlayStop();
 int OverlaySendPacket(Ip next_host, PktPtr pkt);
 PktPtr OverlayRecvPacket(int conn);
-int OverlayStop();
 
 #endif

@@ -16,30 +16,17 @@ int main() {
 }
 
 
-void ConnectNetwork() {
-  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-  if (sockfd < 0) {
-    perror("Error: cannot create socket");
-    exit(-1);
-  }
-
-  struct sockaddr_in network_addr;
-  bzero((char *)&network_addr, sizeof(network_addr));
-  network_addr.sin_family = AF_INET;
-  bcopy((char *)server->h_addr,
-        (char *)&network_addr.sin_addr.s_addr, server->h_length);
-  network_addr.sin_port = htons(hostport);
-
-  if (connect(sockfd, (const struct sockaddr *)&network_addr, sizeof(network_addr)) < 0) {
-    std::cerr << "Error: connect failed" << std::endl;
-    exit(-1);
-  }
-}
-
 int test() {
   srand(time(nullptr));
 
-  ConnectNetwork();
+  Init();
+
+  /* Connect to network layer */
+  int conn = OverlayClientStart("127.0.0.1", kServerPort);
+  if (conn < 0) {
+    std::cerr << "overlay_start failed" << std::endl;
+    exit(-1);
+  }
 
   SrtServerInit(conn);
 
@@ -50,7 +37,7 @@ int test() {
     exit(-1);
   }
   
-  // Connect
+  // Connect to client
   if (SrtServerAccept(sockfd) < 0) {
     std::cerr << "srt_server_accept failed" << std::endl;
     exit(-1);
@@ -106,9 +93,7 @@ int test() {
     exit(-1);
   }
 
-  SrtServerShutdown();
-
-  NetworkStop();
+  Stop();
 
   std::cerr << "Server exits" << std::endl;
 

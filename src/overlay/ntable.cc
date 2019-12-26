@@ -2,43 +2,11 @@
 
 #include <#include <arpa/inet.h>
 
-NeighborTable::NeighborTable() {
-  Init();
-}
+NeighborTable::NeighborTable() {}
 
 void NeighborTable::Init() {
   SetLocalNetInfo();
   ReadCostTable();
-}
-
-int NeighborTable::SetLocalNetInfo() {
-  local_.conn = -1;
-
-  struct ifaddrs *ifaddr, *ifa;
-
-  if (getifaddrs(&ifaddr) < 0) {
-    perror("getifaddres failed");
-    return -1;
-  }
-
-  for (struct ifaddrs *ifa = ifaddr; ifa != nullptr; 
-       ifa = ifa->ifa_next) {
-    if (!ifa->ifa_addr)
-      continue;
-
-    int family = ifa->ifa_addr->sa_family;
-
-    if (family == AF_INET) {
-      struct sockaddr_in *addr = (struct sockaddr_in *)ifa->ifa_addr;
-      if (addr->sin_addr.s_addr != 16777343) {
-        local_.ip = addr->sin_addr.s_addr;
-        return 0;
-      }
-    }
-  }
-
-  local_.ip = 0;
-  return -1;
 }
 
 void NeighborTable::ReadCostTable(const std::string &filename) {

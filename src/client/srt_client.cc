@@ -327,7 +327,7 @@ static void CleanUp() {
 
 static void InputFromIp() {
   while (1) {
-    SegBufPtr seg_buf = SnpRecvSegment(overlay_conn);
+    SegBufPtr seg_buf = TcpInputQueuePop();
 
     if (!running) {
       CleanUp();

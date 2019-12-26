@@ -15,6 +15,23 @@ int main() {
   return test();
 }
 
+void ConnectNetwork() {
+  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (sockfd < 0) {
+    perror("Error: cannot create socket");
+    return -1;
+  }
+
+  struct sockaddr_in network_addr;
+  bzero((char *)&network_addr, sizeof(network_addr));
+  network_addr.sin_family = AF_INET;
+  bcopy((char *)server->h_addr,
+        (char *)&network_addr.sin_addr.s_addr, server->h_length);
+  network_addr.sin_port = htons(hostport);
+
+  return connect(sockfd, (const struct sockaddr *)&network_addr, sizeof(network_addr));
+}
+
 int test() {
   srand(time(nullptr));
 
