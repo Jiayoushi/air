@@ -22,6 +22,7 @@
 #include "../common/send_buffer.h"
 #include "tcp/tcp.h"
 #include "ip/ip.h"
+#include "overlay/overlay.h"
 
 #define kClosed          0
 #define kSynSent         1

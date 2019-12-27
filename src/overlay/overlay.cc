@@ -14,6 +14,7 @@
 #define kWaitFirstEnd         2
 #define kWaitSecondEnd        3
 
+Ip local_ip;
 
 const uint16_t kOverlayPort = 6553;    /* Same for all hosts */
 
@@ -87,10 +88,10 @@ static int ConnectNeighbors() {
       exit(-1);
     }
   
-    //struct timeval tv;
-    //tv.tv_sec = 1;
-    //tv.tv_usec = 0;
-    //setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+    struct timeval tv;
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 
     struct sockaddr_in neighbor_addr;
     memset(&neighbor_addr, 0, sizeof(neighbor_addr));
@@ -217,7 +218,7 @@ static void Input(Ip ip) {
       return;
 
     if (!pkt) {
-      fprintf(stderr, "[Overlay] received null packet");
+      sleep(1);
       continue;
     }
 
@@ -240,15 +241,16 @@ int OverlayStop() {
   return 0;
 }
 
+Ip GetLocalIp() {
+  return nt.GetLocalIp();
+}
+
 int OverlayInit() {
   std::cout << "[OVERLAY]: Overlay layer starting ..." << std::endl;
 
-  kLocalIp = GetLocalIp();
-  struct in_addr ia;
-  ia.s_addr = kLocalIp;
-  std::cout << "[OVERLAY]: Local ip " << inet_ntoa(ia) << std::endl;
-
   nt.Init();
+  std::cout << "[OVERLAY]: Local ip " << GetLocalIp() << std::endl;
+
   std::cout << "[OVERLAY]: Printing neighbors' ip addresses" << std::endl;
   for (auto p = nt.Begin(); p != nt.End(); ++p) {
     struct in_addr a;

@@ -8,4 +8,6 @@ int OverlayInit();
 int OverlayStop();
 int OverlaySend(PktBufPtr pkt);
 
+Ip GetLocalIp();
+
 #endif

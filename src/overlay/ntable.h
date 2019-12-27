@@ -17,7 +17,7 @@ struct NetInfo {
 class NeighborTable {
  private:
   std::map<Ip, NetInfo> neighbors_;
-  NetInfo local_;
+  Ip local_ip_;
 
  public:
   NeighborTable();
@@ -34,7 +34,12 @@ class NeighborTable {
   const NetInfo &operator[](Ip ip) const;
   size_t Size() const;
   Cost GetCost(Ip from_ip, Ip to_ip) const;
+  Ip GetLocalIp() const;
 };
+
+inline Ip NeighborTable::GetLocalIp() const {
+  return local_ip_;
+}
 
 inline Ip NeighborTable::MinIp() const {
   return neighbors_.begin()->first;

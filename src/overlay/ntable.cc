@@ -16,6 +16,10 @@ int NeighborTable::ReadCostTable(const std::string &filename) {
     return -1;
   }
 
+  std::string local_ip_str;
+  file >> local_ip_str;
+  local_ip_ = inet_addr(local_ip_str.c_str());
+
   do {
     std::string from_ip_str;
     std::string to_ip_str;
