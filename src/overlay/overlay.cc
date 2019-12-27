@@ -25,8 +25,6 @@ int network_conn = -1;
 
 static std::atomic<bool> running;
 
-Ip kLocalIp;
-
 static void AcceptNeighbors() {
   int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (listen_fd < 0) {
@@ -42,7 +40,7 @@ static void AcceptNeighbors() {
   memset(&server_addr, 0, sizeof(server_addr));
 
   server_addr.sin_family = AF_INET;
-  server_addr.sin_addr.s_addr = kLocalIp;
+  server_addr.sin_addr.s_addr = INADDR_ANY; //htons(GetLocalIp());
   server_addr.sin_port = htons(kOverlayPort);
 
   if (bind(listen_fd, (const struct sockaddr *)&server_addr, 
@@ -57,7 +55,7 @@ static void AcceptNeighbors() {
   }
 
   for (auto p = nt.Begin(); p != nt.End(); ++p) {
-    if (p->first <= kLocalIp)
+    if (p->first <= GetLocalIp())
       continue;
 
     int connfd = 0;
@@ -79,7 +77,7 @@ static void AcceptNeighbors() {
 
 static int ConnectNeighbors() {
   for (auto p = nt.Begin(); p != nt.End(); ++p) {
-    if (p->first >= kLocalIp)
+    if (p->first >= GetLocalIp())
       continue;
 
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
