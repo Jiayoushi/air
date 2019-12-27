@@ -249,7 +249,9 @@ int OverlayInit() {
   std::cout << "[OVERLAY]: Overlay layer starting ..." << std::endl;
 
   nt.Init();
-  std::cout << "[OVERLAY]: Local ip " << GetLocalIp() << std::endl;
+  struct in_addr t;
+  t.s_addr = GetLocalIp();
+  std::cout << "[OVERLAY]: Local ip " << inet_ntoa(t) << std::endl;
 
   std::cout << "[OVERLAY]: Printing neighbors' ip addresses" << std::endl;
   for (auto p = nt.Begin(); p != nt.End(); ++p) {
