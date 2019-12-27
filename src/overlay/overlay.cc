@@ -67,6 +67,7 @@ static void AcceptNeighbors() {
       perror("Error: accept");
       exit(-1);
     }
+    std::cout << "[OVERLAY]: success" << std::endl;
 
     nt.AddConnection(p->first, connfd);
   }
@@ -104,6 +105,7 @@ static int ConnectNeighbors() {
       perror("[OVERLAY]: connect failed");
       exit(-1);
     }
+    std::cout << "[OVERLAY]: Success" << std::endl;
 
     nt.AddConnection(p->first, sockfd);
   }
