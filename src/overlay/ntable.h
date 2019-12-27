@@ -9,8 +9,9 @@
 
 
 struct NetInfo {
-  Ip ip;
   int conn;
+
+  std::unordered_map<Ip, Cost> costs;
 };
 
 class NeighborTable {
@@ -18,30 +19,44 @@ class NeighborTable {
   std::unordered_map<Ip, NetInfo> neighbors_;
   NetInfo local_;
 
-  std::unordered_map<Ip, std::unordered_map<Ip, Cost>> costs_;
-
  public:
   NeighborTable();
 
   void Init();
   int ReadCostTable(const std::string &filename);
   int AddConnection(Ip ip, int conn);
- 
-  const NetInfo &operator[](int index) const;
+  Cost AddCost(Ip from_ip, Ip to_ip, Cost cost); 
+
+  std::unordered_map<Ip, NetInfo>::iterator Begin();
+  std::unordered_map<Ip, NetInfo>::iterator End();
+
+  const NetInfo &operator[](Ip ip) const;
   size_t Size() const;
   Cost GetCost(Ip from_ip, Ip to_ip) const;
 };
+
+inline const NetInfo &NeighborTable::operator[](Ip ip) const {
+  return neighbors_.at(ip);
+}
+
+inline std::unordered_map<Ip, NetInfo>::iterator NeighborTable::Begin() {
+  return neighbors_.begin();
+}
+
+inline std::unordered_map<Ip, NetInfo>::iterator NeighborTable::End() {
+  return neighbors_.end();
+}
 
 inline size_t NeighborTable::Size() const {
   return neighbors_.size();
 }
 
 inline Cost NeighborTable::GetCost(Ip from_ip, Ip to_ip) const {
-  return costs_.at(from_ip).at(to_ip);
+  return neighbors_.at(from_ip).costs.at(to_ip);
 }
 
-inline const NetInfo &NeighborTable::operator[](int index) const {
-  return neighbors_.at(index);
+inline Cost NeighborTable::AddCost(Ip from_ip, Ip to_ip, Cost cost) {
+  return neighbors_[from_ip].costs[to_ip] = cost;
 }
 
 #endif

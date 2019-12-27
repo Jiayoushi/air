@@ -55,8 +55,8 @@ static void AcceptNeighbors() {
     exit(-1);
   }
 
-  for (int i = 0; i < nt.Size(); ++i) {
-    if (nt[i].ip < kLocalIp)
+  for (auto p = nt.Begin(); p != nt.End(); ++p) {
+    if (p->first < kLocalIp)
       continue;
 
     socklen_t size = sizeof(server_addr);
@@ -67,13 +67,13 @@ static void AcceptNeighbors() {
       exit(-1);
     }
 
-    nt.AddConnection(nt[i].ip, connfd);
+    nt.AddConnection(p->first, connfd);
   }
 }
 
 static int ConnectNeighbors() {
-  for (int i = 0; i < nt.Size(); ++i) {
-    if (nt[i].ip > kLocalIp)
+  for (auto p = nt.Begin(); p != nt.End(); ++p) {
+    if (p->first > kLocalIp)
       continue;
 
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -91,14 +91,14 @@ static int ConnectNeighbors() {
     memset(&neighbor_addr, 0, sizeof(neighbor_addr));
     neighbor_addr.sin_family = AF_INET;
     neighbor_addr.sin_port = htons(kOverlayPort);
-    neighbor_addr.sin_addr.s_addr = nt[i].ip;
+    neighbor_addr.sin_addr.s_addr = p->first;
   
     if (connect(sockfd, (const struct sockaddr *)&neighbor_addr, sizeof(neighbor_addr)) < 0) {
       std::cerr << "Error: connect failed" << std::endl;
       exit(-1);
     }
 
-    nt.AddConnection(nt[i].ip, sockfd);
+    nt.AddConnection(p->first, sockfd);
   }
  
   return 0; 
@@ -196,8 +196,8 @@ static int Forward(PktBufPtr pkt_buf) {
  * Receive packet from the other hosts and send them to the network
  * layer.
  */
-static void Input(int index) {
-  int conn = nt[index].ip;
+static void Input(Ip ip) {
+  int conn = nt[ip].conn;
 
   while (running) {
     PktPtr pkt = OverlayRecv(conn);
@@ -230,18 +230,24 @@ int OverlayStop() {
 }
 
 int OverlayInit() {
-  std::cout << "Overlay layer starting ..." << std::endl;
+  std::cout << "[OVERLAY]: Overlay layer starting ..." << std::endl;
 
   kLocalIp = GetLocalIp();
+  struct in_addr ia;
+  ia.s_addr = kLocalIp;
+  std::cout << "[OVERLAY]: Local ip " << inet_ntoa(ia) << std::endl;
 
   nt.Init();
   std::cout << "Printing neighbors' ip addresses" << std::endl;
-  for (int i = 0; i < nt.Size(); ++i) {
+  for (auto p = nt.Begin(); p != nt.End(); ++p) {
     struct in_addr a;
-    a.s_addr = nt[i].ip;
+    a.s_addr = p->first;
+
     std::cout << inet_ntoa(a) << std::endl;
   }
-  
+ 
+  sleep(3);
+ 
   std::cout << "[OVERLAY]: connecting to other hosts" << std::endl;
   // Accept connections from neighbors with larger ip
   std::thread accept_neighbors(AcceptNeighbors);
@@ -261,8 +267,6 @@ int OverlayInit() {
   }
 
   std::cout << "[OVERLAY]: overlay started" << std::endl;
-  std::cout << "[OVERLAY]: waiting for connections from network layer"
-            << std::endl;
 
   while (running)
     std::this_thread::sleep_for(std::chrono::seconds(60)); 
