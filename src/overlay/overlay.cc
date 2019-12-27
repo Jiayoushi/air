@@ -276,8 +276,8 @@ int OverlayInit() {
   running = true;
   /* Keep receiving packets from neighbors */
   std::vector<std::thread> input_threads;
-  for (int i = 0; i < nt.Size(); ++i) {
-    input_threads.emplace_back(Input, i);
+  for (auto p = nt.Begin(); p != nt.End(); ++p) {
+    input_threads.emplace_back(Input, p->first);
   }
 
   std::cout << "[OVERLAY]: overlay started" << std::endl;
