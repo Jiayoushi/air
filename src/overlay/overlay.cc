@@ -1,19 +1,30 @@
 #include "overlay.h"
 
+#include <unistd.h>
+#include <cstring>
+#include <thread>
+#include <atomic>
+#include <unordered_map>
 
-struct OverlayPacket {
-  Ip next_hop; 
-  Packet pkt;
-};
+#include "ntable.h"
+#include "ip/ip.h"
 
-unsigned short kOverlayPort = 8080;
+#define kWaitFirstStart       0
+#define kWaitSecondStart      1
+#define kWaitFirstEnd         2
+#define kWaitSecondEnd        3
+
+
+const uint16_t kOverlayPort = 65531;    /* Same for all hosts */
 
 NeighborTable nt;
 
 int listen_fd = -1;
 int network_conn = -1;
 
-static std::atomic<bool> running = false;
+static std::atomic<bool> running;
+
+Ip kLocalIp;
 
 static void AcceptNeighbors() {
   int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -23,14 +34,14 @@ static void AcceptNeighbors() {
   }
 
   int optval = 1;
-  setsockopt(listen-fd, SOL_SOCKET, SO_REUSEADDR,
+  setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR,
          (const void *)&optval , sizeof(int));
 
   struct sockaddr_in server_addr;
-  bzero((char *) &server_addr, sizeof(server_addr));
+  memset(&server_addr, 0, sizeof(server_addr));
 
   server_addr.sin_family = AF_INET;
-  server_addr.sin_addr.s_addr = htonl(nt.GetLocalIp());
+  server_addr.sin_addr.s_addr = htonl(kLocalIp);
   server_addr.sin_port = htons(kOverlayPort);
 
   if (bind(listen_fd, (const struct sockaddr *)&server_addr, 
@@ -45,26 +56,24 @@ static void AcceptNeighbors() {
   }
 
   for (int i = 0; i < nt.Size(); ++i) {
-    if (nt[i].ip < nt.GetLocalIp())
+    if (nt[i].ip < kLocalIp)
       continue;
 
     socklen_t size = sizeof(server_addr);
-    int conn_fd = 0;
-    if ((conn_fd = accept(listen_fd, (struct sockaddr *)&server_addr,
+    int connfd = 0;
+    if ((connfd = accept(listen_fd, (struct sockaddr *)&server_addr,
                              &size)) < 0) {
       perror("Error: accept");
       exit(-1);
     }
 
-    nt.AddConnection(nt[i]->ip, connfd);
+    nt.AddConnection(nt[i].ip, connfd);
   }
-
-  return 0;
 }
 
 static int ConnectNeighbors() {
   for (int i = 0; i < nt.Size(); ++i) {
-    if (nt[i].ip > nt.GetLocalIp())
+    if (nt[i].ip > kLocalIp)
       continue;
 
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -73,31 +82,23 @@ static int ConnectNeighbors() {
       exit(-1);
     }
   
-    struct hostent *server;
-    server = gethostbyname(hostname);
-    if (server == NULL) {
-      perror("Error: gethostbyname failed");
-      exit(-1);
-    }
-
     struct timeval tv;
     tv.tv_sec = 1;
     tv.tv_usec = 0;
     setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 
-    struct sockaddr_in server_addr;
-    bzero((char *)&server_addr, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    bcopy((char *)server->h_addr,
-          (char *)&server_addr.sin_addr.s_addr, server->h_length);
-    server_addr.sin_port = htons(hostport);
+    struct sockaddr_in neighbor_addr;
+    memset(&neighbor_addr, 0, sizeof(neighbor_addr));
+    neighbor_addr.sin_family = AF_INET;
+    neighbor_addr.sin_port = htons(kOverlayPort);
+    neighbor_addr.sin_addr.s_addr = nt[i].ip;
   
-    if (connect(sockfd, (const struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+    if (connect(sockfd, (const struct sockaddr *)&neighbor_addr, sizeof(neighbor_addr)) < 0) {
       std::cerr << "Error: connect failed" << std::endl;
       exit(-1);
     }
 
-    nt.AddConnection(nt[i]->ip, sockfd);
+    nt.AddConnection(nt[i].ip, sockfd);
   }
  
   return 0; 
@@ -115,7 +116,7 @@ int OverlaySend(PktBufPtr pkt_buf) {
   }
 
   if (send(connection, pkt_buf->packet.get(), 
-           pkt_buf->packet.header.length, 0) < 0) {
+           pkt_buf->packet->header.length, 0) < 0) {
     perror("[PKT] SendPacket failed to send packet");
     return -1;
   }
@@ -164,7 +165,7 @@ static PktPtr OverlayRecv(int conn) {
  
           uint16_t pkt_len = idx - 2;
           memcpy(pkt.get(), buf, pkt_len);
-          pkt->length = pkt_len;
+          pkt->header.length = pkt_len;
 
           return pkt;
         } else if (c == '!') {
@@ -187,8 +188,8 @@ static PktPtr OverlayRecv(int conn) {
 /*
  * Forward packets to the network layer
  */
-static int Forward(PktPtr pkt) {
-  return SendPacket(pkt, network_conn);
+static int Forward(PktBufPtr pkt_buf) {
+  return IpInputQueuePush(pkt_buf);
 }
 
 /*
@@ -199,17 +200,19 @@ static void Input(int index) {
   int conn = nt[index].ip;
 
   while (running) {
-    PktPtr pkt = OverlayRecvPacket(conn);
+    PktPtr pkt = OverlayRecv(conn);
 
     if (!running)
       return;
 
     if (!pkt) {
-      fprintf(stderr, "[Overlay] index [%d] received null packet");
-      return 0;
+      fprintf(stderr, "[Overlay] received null packet");
+      continue;
     }
 
-    if (Forward(pkt) < 0) {
+    PktBufPtr pkt_buf = std::make_shared<PacketBuffer>();
+    pkt_buf->packet = pkt;
+    if (Forward(pkt_buf) < 0) {
       fprintf(stderr, "[Overlay] failed to deliver packet to network layer");
     }
   }
@@ -217,8 +220,11 @@ static void Input(int index) {
 
 int OverlayStop() {
   running = false;
-  if (close(sockfd) < 0)
-    return -1;
+
+  for (int i = 0; i < nt.Size(); ++i) {
+    if (close(nt[i].conn) < 0)
+      return -1;
+  }
 
   return 0;
 }
@@ -226,11 +232,13 @@ int OverlayStop() {
 int OverlayInit() {
   std::cout << "Overlay layer starting ..." << std::endl;
 
+  kLocalIp = GetLocalIp();
+
   nt.Init();
   std::cout << "Printing neighbors' ip addresses" << std::endl;
-  for (Ip ip: nt.GetNeighbors()) {
+  for (int i = 0; i < nt.Size(); ++i) {
     struct in_addr a;
-    a.s_addr = ip;
+    a.s_addr = nt[i].ip;
     std::cout << inet_ntoa(a) << std::endl;
   }
   
@@ -244,6 +252,8 @@ int OverlayInit() {
   /* Connection to other hosts are established */
   std::cout << "[OVERLAY]: connections established" << std::endl;
 
+
+  running = true;
   /* Keep receiving packets from neighbors */
   std::vector<std::thread> input_threads;
   for (int i = 0; i < nt.Size(); ++i) {
@@ -255,7 +265,7 @@ int OverlayInit() {
             << std::endl;
 
   while (running)
-    std::this_thread::sleep_for(60); 
+    std::this_thread::sleep_for(std::chrono::seconds(60)); 
 
   for (int i = 0; i < nt.Size(); ++i)
     input_threads[i].join();

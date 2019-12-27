@@ -2,6 +2,11 @@
 #define AIR_NTABLE_H_
 
 #include <arpa/inet.h>
+#include <unordered_map>
+#include <string>
+
+#include "common/common.h"
+
 
 struct NetInfo {
   Ip ip;
@@ -18,8 +23,10 @@ class NeighborTable {
  public:
   NeighborTable();
 
+  void Init();
+  int ReadCostTable(const std::string &filename);
   int AddConnection(Ip ip, int conn);
-  
+ 
   const NetInfo &operator[](int index) const;
   size_t Size() const;
   Cost GetCost(Ip from_ip, Ip to_ip) const;
@@ -34,7 +41,7 @@ inline Cost NeighborTable::GetCost(Ip from_ip, Ip to_ip) const {
 }
 
 inline const NetInfo &NeighborTable::operator[](int index) const {
-  return neighbors_[index];
+  return neighbors_.at(index);
 }
 
 #endif

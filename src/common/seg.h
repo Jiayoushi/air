@@ -7,6 +7,13 @@
 #include <chrono>
 
 #include "constants.h"
+#include "common.h"
+
+struct Segment;
+struct SegmentBuffer;
+typedef std::chrono::milliseconds Timepoint;
+typedef std::shared_ptr<Segment> SegPtr;
+typedef std::shared_ptr<SegmentBuffer> SegBufPtr;
 
 enum SegmentType {
   kSyn,
@@ -33,7 +40,7 @@ struct Segment {
   char data[kMss];
 };
 
-typedef std::chrono::milliseconds Timepoint;
+
 
 /*
  * Segment Buffer
@@ -48,27 +55,9 @@ struct SegmentBuffer {
   Timepoint send_time;                /* Last time this segment was sent */
   Timepoint acked_time;               /* The first time this segment was acked */
 
-  SegmentBuffer(std::shared_ptr<Segment> s=nullptr, uint32_t size=0, sip=0, dip=0):
-   segment(s), data_size(size), src_ip(i), dest_ip(i), send_time(), acked_time() {}
+  SegmentBuffer(std::shared_ptr<Segment> s=nullptr, uint32_t size=0, Ip sip=0, Ip dip=0):
+   segment(s), data_size(size), src_ip(sip), dest_ip(dip), send_time(), acked_time() {}
 };
-
-typedef std::shared_ptr<Segment> SegPtr;
-typedef std::shared_ptr<SegmentBuffer> SegBufPtr;
-
-
-
-/*
-  First send "!&" to indicate the start of a segment
-  Then send the segment.
-  Finally, send end of packet markers "!#" to indicate the end of a segment.
-
-  Return -1 on error, 0 on success.
-*/
-int SnpSendSegment(int connection, SegBufPtr seg_buf);
-
-SegBufPtr SnpRecvSegment(int connection);
-
-int SegmentLost(std::shared_ptr<Segment> seg);
 
 uint16_t Checksum(std::shared_ptr<Segment> seg, uint32_t size);
 

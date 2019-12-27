@@ -10,9 +10,8 @@
 #include <stdlib.h>
 #include <iostream>
 
-#include "../common/constants.h"
+#include "common/constants.h"
 #include "srt_client.h"
-#include "srt_client_overlay.h"
 
 #define kClientPort1  8000
 #define kServerPort1  8001

@@ -1,12 +1,57 @@
 #include "tcp.h"
 
-BlockingQueue<SegmentBuffer> tcp_input;
+#include "common/blocking_queue.h"
+#include "common/seg.h"
+
+BlockingQueue<SegBufPtr> tcp_input;
+
+#define kSegmentLost          0
+#define kSegmentError         1
+#define kSegmentIntact        2
+
+/*
+  Artificial segment lost and invalid checksum
+*/
+static int SegmentLost(SegPtr seg) {
+  if ((rand() % 100) < kPacketLossRate * 100) {
+    std::cerr << "[LOST]" << std::endl;
+    return kSegmentLost;
+  }
+
+  if ((rand() % 100) < kPacketErrorRate * 100) {
+    int len = sizeof(SegmentHeader);
+
+    // Random error bit
+    int error_bit = rand() % (len * 8);
+
+    // Flip
+    char *p = (char *)seg.get() + error_bit / 8;
+    *p ^= 1 << (error_bit % 8);
+
+    return kSegmentError;
+  }
+
+  return kSegmentIntact;
+}
 
 int TcpInputQueuePush(SegBufPtr seg_buf) {
+  if (SegmentLost(seg_buf->segment) == kSegmentLost)
+    return 0;
+
   tcp_input.Push(seg_buf);
   return 0;
 }
 
 SegBufPtr TcpInputQueuePop() {
-  return tcp_input.Pop();
+  return *tcp_input.Pop().get();
+}
+
+// TODO
+int TcpInit() {
+  return 0;
+}
+
+// TODO
+int TcpStop() {
+  return 0;
 }

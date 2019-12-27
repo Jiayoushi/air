@@ -11,9 +11,8 @@
 #include <time.h>
 #include <iostream>
 
-#include "../common/constants.h"
+#include "common/constants.h"
 #include "srt_server.h"
-#include "srt_server_overlay.h"
 
 #define kClientPort1 8000
 #define kServerPort1 8001

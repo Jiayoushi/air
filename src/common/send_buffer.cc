@@ -1,6 +1,7 @@
 #include "send_buffer.h"
 
 #include "common.h"
+#include "ip/ip.h"
 
 int SendBuffer::PushBack(SegBufPtr seg_buf) {
   if (Full())

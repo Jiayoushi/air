@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <iostream>
 #include <cstddef>
-
+#include <netinet/in.h>
 
 #define DEBUG_ENABLE
 
@@ -15,5 +15,10 @@
   #define SDEBUG 0 && std::cout
   #define CDEBUG 0 && std::cout
 #endif
+
+
+typedef in_addr_t Ip;
+typedef uint32_t Cost;
+
 
 #endif

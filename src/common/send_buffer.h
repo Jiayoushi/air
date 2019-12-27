@@ -16,7 +16,6 @@
  */
 class SendBuffer {
  private:
-  const uint32_t kNetworkConn;
   uint32_t retry_;
 
   std::list<SegBufPtr> unacked_;
@@ -24,8 +23,7 @@ class SendBuffer {
 
 
  public:
-  SendBuffer(uint32_t network_conn):
-    kNetworkConn(network_conn),
+  SendBuffer():
     retry_(0),
     unacked_(),
     unsent_() {}

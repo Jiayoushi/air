@@ -1,34 +1,45 @@
-#include <iostream>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <cstring>
 #include <fstream>
+#include <string>
+#include <iostream>
 
-#include "server/srt_server.h"
 #include "client/srt_client.h"
-#include "server/srt_server_overlay.h"
-#include "client/srt_client_overlay.h"
+#include "air/air.h"
+#include "ip/ip.h"
 
-int test();
+int test(const char *, const char *);
 
-#define kClientPort  8000
-#define kServerPort  8001
+int main(int argc, char *argv[]) {
+  if (argc != 3) {
+    std::cerr << "Usage: ./a.out <server hostname> <server port>" << std::endl;
+    return -1;
+  }
 
-int main() {
-  return test();
+  return test(argv[1], argv[2]);
 }
 
-int test() {
-  srand(time(nullptr));
-
+int test(const char *server_hostname, const char *server_port) {
   Init();
 
   // Create socket
-  int sockfd = SrtClientSock(kClientPort);
+  int sockfd = SrtClientSock();
   if (sockfd < 0) {
     std::cerr << "srt_client_sock failed" << std::endl;
     exit(-1);
   }
-  
+ 
+  uint16_t port = atoi(server_port);
+  struct hostent *he = gethostbyname(server_hostname);
+  struct sockaddr_in server_addr;
+  memcpy(&server_addr.sin_addr, he->h_addr_list[0], he->h_length);
+
   // Connect
-  if (SrtClientConnect(sockfd, kServerPort) < 0) {
+  if (SrtClientConnect(sockfd, server_addr.sin_addr.s_addr, port) < 0) {
     std::cerr << "srt_client_connect failed" << std::endl;
     exit(-1);
   }

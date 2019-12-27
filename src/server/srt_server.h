@@ -7,11 +7,9 @@
 #include "../common/constants.h"
 
 
-void SrtServerInit(int conn);
+int SrtServerSock();
 
-void SrtServerShutdown();
-
-int SrtServerSock(Ip ip, unsigned int server_port);
+int SrtServerBind(int sockfd, Ip server_ip, uint16_t server_port);
 
 int SrtServerAccept(int sockfd);
 

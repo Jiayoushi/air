@@ -20,6 +20,8 @@
 #include "../common/blocking_queue.h"
 #include "../common/common.h"
 #include "../common/send_buffer.h"
+#include "tcp/tcp.h"
+#include "ip/ip.h"
 
 #define kClosed          0
 #define kSynSent         1
@@ -57,7 +59,7 @@ struct ClientTcb {
   std::condition_variable waiting;    /* A condition variable used to wait for message either from timeouts or from a new incoming segment */
   SendBuffer send_buffer; 
 
-  ClientTcb(uint32_t overlay_conn): 
+  ClientTcb(): 
     src_ip(0),
     src_port(0), 
     dest_ip(0),
@@ -71,13 +73,12 @@ struct ClientTcb {
     irs(0),
     lock(),
     waiting(),
-    send_buffer(overlay_conn) {}
+    send_buffer() {}
 };
 
 typedef std::shared_ptr<ClientTcb> TcbPtr;
 typedef std::chrono::duration<double, std::milli> TimeInterval;
 
-static uint32_t overlay_conn;                                      /* Connector to the ip stack */
 static std::atomic<bool> running;                                  /* Control the running of all threads. */
 std::mutex tcb_table_lock;
 static std::vector<std::shared_ptr<ClientTcb>> tcb_table;
@@ -86,15 +87,14 @@ static std::shared_ptr<std::thread> input_thread;                  /* Receiving 
 const static TimeInterval kTimeoutLoopInterval(500);               /* Time interval between checking timeouts. */
 
 
+static uint16_t random_port = 10000;
 
-int SrtClientSock(Ip src_ip, uint32_t src_port) {
+int SrtClientSock() {
   tcb_table_lock.lock();
 
   for (int i = 0; i < kMaxConnection; ++i) {
     if (tcb_table[i] == nullptr) {
-      tcb_table[i] = std::make_shared<ClientTcb>(overlay_conn);
-      tcb_table[i]->src_ip = src_ip;
-      tcb_table[i]->src_port = src_port;
+      tcb_table[i] = std::make_shared<ClientTcb>();
       tcb_table_lock.unlock();
       return i;
     }
@@ -130,7 +130,7 @@ static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, enum SegmentType type, const vo
  *
  * Return value: -1 on error, 0 on success
  */
-int SrtClientConnect(int sockfd, Ip ip, uint32_t dest_port) {
+int SrtClientConnect(int sockfd, Ip dest_ip, uint16_t dest_port) {
   std::shared_ptr<ClientTcb> tcb = tcb_table[sockfd];
   if (tcb->state != kClosed)
     return -1;
@@ -138,9 +138,13 @@ int SrtClientConnect(int sockfd, Ip ip, uint32_t dest_port) {
   /* Lock to ensure the atomicity of send_buffer */
   std::unique_lock<std::mutex> lk(tcb->lock);
 
-  /* Create Syn Segment and push it back to the sender buffer */
-  tcb->dest_ip = ip;
+  /* Assign addresses */
+  tcb->src_ip = GetLocalIp();
+  tcb->src_port = random_port++;
+  tcb->dest_ip = dest_ip;
   tcb->dest_port = dest_port;
+
+  /* Create Syn Segment and push it back to the sender buffer */
   SegBufPtr syn_buf = CreateSegmentBuffer(tcb, kSyn);
   tcb->send_buffer.PushBack(syn_buf);
 
@@ -238,7 +242,7 @@ static std::shared_ptr<ClientTcb> Demultiplex(SegBufPtr seg_buf) {
 
     if (seg_buf->segment->header.src_port == tcb_table[tcb_id]->dest_port &&
         seg_buf->segment->header.dest_port == tcb_table[tcb_id]->src_port &&
-        seg_buf->ip == tcb_table[tcb_id]->dest_ip)
+        seg_buf->src_ip == tcb_table[tcb_id]->dest_ip)
     return tcb_table[tcb_id];
   }
 
@@ -363,7 +367,6 @@ static void Timeout() {
 }
 
 void SrtClientInit(int conn) {
-  overlay_conn = conn;
   tcb_table = std::vector<TcbPtr>(kMaxConnection, nullptr);
 
   running = true;

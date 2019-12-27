@@ -1,9 +1,11 @@
 #ifndef AIR_PKT_H_
 #define AIR_PKT_H_
 
+#include <netinet/in.h>
 #include <memory>
 
 #include "constants.h"
+#include "common.h"
 
 /*
  * Packet
@@ -12,8 +14,6 @@ struct Packet;
 struct PacketBuffer;
 typedef std::shared_ptr<Packet> PktPtr;
 typedef std::shared_ptr<PacketBuffer> PktBufPtr;
-typedef in_addr_t Ip;
-typedef uint32_t Cost;
 
 
 enum PacketType {
@@ -35,7 +35,7 @@ struct Packet {
 };
 
 struct PacketBuffer {
-  PktPtr pkt;
+  PktPtr packet;
 
   Ip next_hop;
 };

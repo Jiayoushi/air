@@ -1,16 +1,16 @@
 #include "ntable.h"
 
-#include <#include <arpa/inet.h>
+#include <fstream>
 
 NeighborTable::NeighborTable() {}
 
 void NeighborTable::Init() {
-  SetLocalNetInfo();
-  ReadCostTable();
+  if (ReadCostTable("topology.dat") < 0)
+    exit(-1);
 }
 
-void NeighborTable::ReadCostTable(const std::string &filename) {
-  ifstream file(filename);
+int NeighborTable::ReadCostTable(const std::string &filename) {
+  std::ifstream file(filename);
   if (!file) {
     std::cerr << "Failed to open " << filename << std::endl;
     return -1;
@@ -25,8 +25,8 @@ void NeighborTable::ReadCostTable(const std::string &filename) {
     file >> to_ip_str;
     file >> cost;
 
-    Ip from_ip = inet_addr(from_ip_str);
-    Ip to_ip = inet_addr(to_ip_str);
+    Ip from_ip = inet_addr(from_ip_str.c_str());
+    Ip to_ip = inet_addr(to_ip_str.c_str());
 
     costs_[from_ip][to_ip] = cost;
     costs_[to_ip][from_ip] = cost;
@@ -40,10 +40,6 @@ int NeighborTable::AddConnection(Ip ip, int conn) {
   if (neighbors_.find(ip) == neighbors_.end())
     return -1;
 
-  neighbors_[ip] = conn;
+  neighbors_[ip].conn = conn;
   return 0;
-}
-
-Ip NeighborTable::GetIp() const {
-  return local_.ip;
 }
