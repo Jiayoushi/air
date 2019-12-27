@@ -70,7 +70,7 @@ static void AcceptNeighbors() {
 
     std::cout << "[OVERLAY]: accepted " << inet_ntoa(client_addr.sin_addr) << std::endl;
 
-    nt.AddConnection(p->first, connfd);
+    nt.AddConnection(client_addr.sin_addr.s_addr, connfd);
   }
 
   std::cout << "[OVERLAY]: accepting terminated" << std::endl;
