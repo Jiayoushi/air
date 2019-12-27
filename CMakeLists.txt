@@ -30,6 +30,10 @@ add_executable(file_client
                tests/file_client.cc)
 add_executable(file_server
                tests/file_server.cc)
+add_executable(echo_client
+               tests/echo/echo_client.cc)
+add_executable(echo_server
+               tests/echo/echo_server.cc)
 
 #target_compile_options(app_client PRIVATE -Wall -Wuninitialized)
 #target_compile_options(app_server PRIVATE -Wall -Wuninitialized)

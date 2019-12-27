@@ -12,12 +12,14 @@ build
 *.pem
 *.dat
 
+
 *log.txt
 *dialogue.txt
 
 unit_test
 file_server
 file_client
-
+echo_client
+echo_server
 air_client
 air_server
