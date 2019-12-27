@@ -15,7 +15,7 @@
 #define kWaitSecondEnd        3
 
 
-const uint16_t kOverlayPort = 65531;    /* Same for all hosts */
+const uint16_t kOverlayPort = 6553;    /* Same for all hosts */
 
 NeighborTable nt;
 
@@ -41,7 +41,7 @@ static void AcceptNeighbors() {
   memset(&server_addr, 0, sizeof(server_addr));
 
   server_addr.sin_family = AF_INET;
-  server_addr.sin_addr.s_addr = htonl(kLocalIp);
+  server_addr.sin_addr.s_addr = kLocalIp;
   server_addr.sin_port = htons(kOverlayPort);
 
   if (bind(listen_fd, (const struct sockaddr *)&server_addr, 
@@ -56,12 +56,13 @@ static void AcceptNeighbors() {
   }
 
   for (auto p = nt.Begin(); p != nt.End(); ++p) {
-    if (p->first < kLocalIp)
+    if (p->first <= kLocalIp)
       continue;
 
-    socklen_t size = sizeof(server_addr);
     int connfd = 0;
-    if ((connfd = accept(listen_fd, (struct sockaddr *)&server_addr,
+    struct sockaddr_in client_addr;
+    socklen_t size = sizeof(client_addr);
+    if ((connfd = accept(listen_fd, (struct sockaddr *)&client_addr,
                              &size)) < 0) {
       perror("Error: accept");
       exit(-1);
@@ -69,38 +70,45 @@ static void AcceptNeighbors() {
 
     nt.AddConnection(p->first, connfd);
   }
+
+  std::cout << "[OVERLAY]: accepting terminated" << std::endl;
 }
 
 static int ConnectNeighbors() {
   for (auto p = nt.Begin(); p != nt.End(); ++p) {
-    if (p->first > kLocalIp)
+    if (p->first >= kLocalIp)
       continue;
 
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
-      perror("Error: cannot create socket");
+      perror("[OVERLAY]: cannot create socket");
       exit(-1);
     }
   
-    struct timeval tv;
-    tv.tv_sec = 1;
-    tv.tv_usec = 0;
-    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+    //struct timeval tv;
+    //tv.tv_sec = 1;
+    //tv.tv_usec = 0;
+    //setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 
     struct sockaddr_in neighbor_addr;
     memset(&neighbor_addr, 0, sizeof(neighbor_addr));
     neighbor_addr.sin_family = AF_INET;
     neighbor_addr.sin_port = htons(kOverlayPort);
     neighbor_addr.sin_addr.s_addr = p->first;
-  
+ 
+    struct in_addr a;
+    a.s_addr = p->first;
+
+    std::cout << "[OVERLAY]: Connecting to " << inet_ntoa(a) << std::endl;
     if (connect(sockfd, (const struct sockaddr *)&neighbor_addr, sizeof(neighbor_addr)) < 0) {
-      std::cerr << "Error: connect failed" << std::endl;
+      perror("[OVERLAY]: connect failed");
       exit(-1);
     }
 
     nt.AddConnection(p->first, sockfd);
   }
  
+  std::cout << "[OVERLAY]: connection terminated" << std::endl;
   return 0; 
 }
 
@@ -238,25 +246,28 @@ int OverlayInit() {
   std::cout << "[OVERLAY]: Local ip " << inet_ntoa(ia) << std::endl;
 
   nt.Init();
-  std::cout << "Printing neighbors' ip addresses" << std::endl;
+  std::cout << "[OVERLAY]: Printing neighbors' ip addresses" << std::endl;
   for (auto p = nt.Begin(); p != nt.End(); ++p) {
     struct in_addr a;
     a.s_addr = p->first;
 
-    std::cout << inet_ntoa(a) << std::endl;
+    std::cout << "[OVERLAY]: " << inet_ntoa(a) << std::endl;
   }
  
-  sleep(3);
- 
-  std::cout << "[OVERLAY]: connecting to other hosts" << std::endl;
-  // Accept connections from neighbors with larger ip
+  std::cout << "[OVERLAY]: accepting connections from other hosts" << std::endl;
   std::thread accept_neighbors(AcceptNeighbors);
+
+  sleep(3);
+
+  std::cout << "[OVERLAY]: connecting to other hosts" << std::endl;
   std::thread connect_neighbors(ConnectNeighbors);
+
   accept_neighbors.join();
   connect_neighbors.join();
 
+
   /* Connection to other hosts are established */
-  std::cout << "[OVERLAY]: connections established" << std::endl;
+  std::cout << "[OVERLAY]: topology established" << std::endl;
 
 
   running = true;
