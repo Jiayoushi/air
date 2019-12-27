@@ -67,7 +67,8 @@ static void AcceptNeighbors() {
       perror("Error: accept");
       exit(-1);
     }
-    std::cout << "[OVERLAY]: success" << std::endl;
+
+    std::cout << "[OVERLAY]: connected to " << inet_ntoa(client_addr.sin_addr) << std::endl;
 
     nt.AddConnection(p->first, connfd);
   }
