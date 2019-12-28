@@ -57,5 +57,13 @@ struct RouteUpdate {
 int SendPacket(PktPtr pkt, int conn);
 int RecvPacket(PktPtr pkt, int conn);
 
+std::string PktToString(PktPtr pkt);
+
+inline std::ostream &operator<<(std::ostream &out, PktBufPtr pkt_buf) {
+  out << PktToString(pkt_buf->packet);
+
+  return out;
+}
+
 
 #endif

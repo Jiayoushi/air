@@ -42,10 +42,10 @@ bool ValidChecksum(std::shared_ptr<Segment> seg, unsigned int size) {
 }
 
 
-std::vector<std::string> type_strings = 
+static std::vector<std::string> type_strings = 
 {"SYN", "SYN_ACK", "FIN", "FIN_ACK", "DATA", "DATA_ACK"};
 
-std::string GetTypeString(uint16_t type) {
+static std::string GetTypeString(uint16_t type) {
   if (type < 0 || type >= type_strings.size()) {
     return "UNMATCHED_TYPE";
   } else {

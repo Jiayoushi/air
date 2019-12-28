@@ -31,6 +31,8 @@ int IpSend(SegBufPtr seg_buf) {
                                    sizeof(SegmentHeader) +
                                    seg_buf->data_size;
 
+  memcpy(pkt_buf->packet->data, seg_buf->segment.get(), seg_buf->data_size + sizeof(SegmentHeader));
+
   // TODO:
   pkt_buf->next_hop = seg_buf->dest_ip;
 
@@ -78,7 +80,7 @@ static int Forward(PktBufPtr pkt_buf) {
 
   seg_buf->segment = std::make_shared<Segment>();
   memcpy(seg_buf->segment.get(), 
-         pkt_buf->packet->data + sizeof(PacketHeader), 
+         pkt_buf->packet->data, 
          pkt_buf->packet->header.length - sizeof(PacketHeader));
 
   TcpInputQueuePush(seg_buf);
@@ -98,7 +100,7 @@ static void Input() {
     }
 
     Forward(pkt_buf);
-    std::cout << "[IP] received packet" << pkt_buf << std::endl;
+    std::cout << "[IP] received packet " << pkt_buf << std::endl;
   }
 }
 
