@@ -285,8 +285,7 @@ int SrtServerClose(int sockfd) {
   return 0;
 }
 
-void SrtServerInit(int conn) {
-  overlay_conn = conn;
+void SrtServerInit() {
   running = true;
 
   input_thread = std::make_shared<std::thread>(InputFromIp);

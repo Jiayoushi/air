@@ -28,6 +28,8 @@ int main(int argc, char *argv[]) {
 int test(const char *server_hostname, const char *server_port) {
   Init();
 
+  SrtServerInit();
+
   // Create socket
   int sockfd = SrtServerSock();
   if (sockfd < 0) {
@@ -99,6 +101,8 @@ int test(const char *server_hostname, const char *server_port) {
     std::cerr << "fail to close srt server" << std::endl;
     exit(-1);
   }
+
+  SrtServerShutdown();
 
   Stop();
   std::cerr << "Server stopped" << std::endl;

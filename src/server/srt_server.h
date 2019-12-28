@@ -6,6 +6,7 @@
 #include "../common/seg.h"
 #include "../common/constants.h"
 
+void SrtServerInit();
 
 int SrtServerSock();
 
@@ -16,5 +17,7 @@ int SrtServerAccept(int sockfd);
 size_t SrtServerRecv(int sockfd, void *buffer, unsigned int length);
 
 int SrtServerClose(int sockfd);
+
+void SrtServerShutdown();
 
 #endif

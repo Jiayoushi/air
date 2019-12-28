@@ -367,7 +367,7 @@ static void Timeout() {
   }
 }
 
-void SrtClientInit(int conn) {
+void SrtClientInit() {
   tcb_table = std::vector<TcbPtr>(kMaxConnection, nullptr);
 
   running = true;

@@ -122,18 +122,18 @@ int OverlaySend(PktBufPtr pkt_buf) {
   int connection = nt[pkt_buf->next_hop].conn;
 
   if (send(connection, pkt_start, 2, 0) < 0) {
-    perror("[PKT] SendPacket failed to send pkt_start");
+    perror("[OVERLAY] SendPacket failed to send pkt_start");
     return -1;
   }
 
   if (send(connection, pkt_buf->packet.get(), 
            pkt_buf->packet->header.length, 0) < 0) {
-    perror("[PKT] SendPacket failed to send packet");
+    perror("[OVERLAY] SendPacket failed to send packet");
     return -1;
   }
 
   if (send(connection, pkt_end, 2, 0) < 0) {
-    perror("[PKT] SendPacket failed to send pkt_end");
+    perror("[OVERLAY] SendPacket failed to send pkt_end");
     return -1;
   }
 

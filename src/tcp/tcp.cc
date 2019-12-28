@@ -49,6 +49,7 @@ SegBufPtr TcpInputQueuePop() {
 
 // TODO
 int TcpInit() {
+
   RegisterInitSuccess();
 
   return 0;
@@ -56,5 +57,6 @@ int TcpInit() {
 
 // TODO
 int TcpStop() {
+
   return 0;
 }

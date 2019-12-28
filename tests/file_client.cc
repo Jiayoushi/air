@@ -26,6 +26,8 @@ int main(int argc, char *argv[]) {
 int test(const char *server_hostname, const char *server_port) {
   Init();
 
+  SrtClientInit();
+
   // Create socket
   int sockfd = SrtClientSock();
   if (sockfd < 0) {
@@ -78,6 +80,8 @@ int test(const char *server_hostname, const char *server_port) {
     exit(-1);
   }
   std::cerr << "Client closed" << std::endl;
+
+  SrtClientShutdown();
 
   Stop();
   std::cerr << "Client stopped" << std::endl;
