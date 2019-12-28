@@ -43,11 +43,6 @@ int IpSend(SegBufPtr seg_buf) {
   return 0;
 }
 
-int IpStop() {
-  running = false;
-  return 0;
-}
-
 // TODO
 static void RouteUpdate() {
   while (running) {
@@ -70,7 +65,11 @@ int IpInputQueuePush(PktBufPtr pkt_buf) {
 }
 
 PktBufPtr IpInputQueuePop() {
-  return *ip_input.Pop().get();
+  auto p = ip_input.Pop(std::chrono::duration<double, std::deci>(1));
+  if (!p)
+    return nullptr;
+
+  return *p.get();
 }
 
 static int Forward(PktBufPtr pkt_buf) {
@@ -97,13 +96,18 @@ static void Input() {
       return;
 
     if (!pkt_buf) {
-      fprintf(stderr, "[IP] received null packet");
       continue;
     }
 
     Forward(pkt_buf);
     std::cout << "[IP] received packet " << pkt_buf << std::endl;
   }
+}
+
+
+int IpStop() {
+  running = false;
+  return 0;
 }
 
 int IpInit() {
@@ -123,6 +127,8 @@ int IpInit() {
 
   update.join();
   input.join();
+
+  std::cout << "[IP] exited" << std::endl;
 
   return 0;
 }

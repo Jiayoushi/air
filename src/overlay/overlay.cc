@@ -232,8 +232,8 @@ static void Input(Ip ip) {
 int OverlayStop() {
   running = false;
 
-  for (int i = 0; i < nt.Size(); ++i) {
-    if (close(nt[i].conn) < 0)
+  for (auto p = nt.Begin(); p != nt.End(); ++p) {
+    if (close(p->second.conn) < 0)
       return -1;
   }
 

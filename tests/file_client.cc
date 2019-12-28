@@ -79,12 +79,13 @@ int test(const char *server_hostname, const char *server_port) {
     std::cerr << "fail to close srt client" << std::endl;
     exit(-1);
   }
-  std::cerr << "Client closed" << std::endl;
+  std::cerr << "socket closed" << std::endl;
 
   SrtClientShutdown();
+  std::cout << "Shutdown" << std::endl;
 
   Stop();
-  std::cerr << "Client stopped" << std::endl;
+  std::cerr << "overlay stopped" << std::endl;
 
   return 0;
 }

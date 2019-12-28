@@ -95,19 +95,19 @@ int test(const char *server_hostname, const char *server_port) {
     std::cerr << "Recv #2 succeed. correct file content." << std::endl;
   }
 
-  sleep(10);
+  sleep(6);
 
   if(SrtServerClose(sockfd) < 0) {
     std::cerr << "fail to close srt server" << std::endl;
     exit(-1);
   }
-  std::cout << "[APP] closed" << std::endl;
+  std::cout << "socket closed" << std::endl;
 
   SrtServerShutdown();
-  std::cout << "[APP] shutdown" << std::endl;
+  std::cout << "tcp shutdown" << std::endl;
 
   Stop();
-  std::cerr << "Server stopped" << std::endl;
+  std::cerr << "overlay stopped" << std::endl;
 
   return 0;
 }

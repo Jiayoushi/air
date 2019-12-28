@@ -47,7 +47,11 @@ int TcpInputQueuePush(SegBufPtr seg_buf) {
 }
 
 SegBufPtr TcpInputQueuePop() {
-  return *tcp_input.Pop().get();
+  auto p = tcp_input.Pop(std::chrono::duration<double, std::deci>(1));
+  if (!p)
+    return nullptr;
+
+  return *p.get();
 }
 
 // TODO

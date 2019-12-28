@@ -333,10 +333,8 @@ static void InputFromIp() {
   while (1) {
     SegBufPtr seg_buf = TcpInputQueuePop();
 
-    if (!running) {
-      CleanUp();
+    if (!running)
       break;
-    }
 
     if (seg_buf != nullptr) {
       CDEBUG << "RECV: " << seg_buf << std::endl;
@@ -392,4 +390,6 @@ void SrtClientShutdown() {
 
   timeout_thread->join();
   input_thread->join();
+
+  std::cout << "[TCP] exited" << std::endl;
 }

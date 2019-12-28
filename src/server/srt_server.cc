@@ -299,5 +299,7 @@ void SrtServerShutdown() {
   NotifyShutdown();
 
   input_thread->join();
+
+  std::cout << "Exited" << std::endl;
 }
 
