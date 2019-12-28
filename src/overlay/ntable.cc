@@ -33,8 +33,6 @@ int NeighborTable::ReadCostTable(const std::string &filename) {
     file >> to_ip_str;
     file >> cost;
 
-    std::cout << from_ip_str << ", " << to_ip_str << ", " << cost << ", " << std::endl;
-
     if (file.eof())
       break;
 

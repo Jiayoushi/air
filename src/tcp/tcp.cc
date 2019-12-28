@@ -2,6 +2,7 @@
 
 #include "common/blocking_queue.h"
 #include "common/seg.h"
+#include "air/air.h"
 
 BlockingQueue<SegBufPtr> tcp_input;
 
@@ -48,6 +49,8 @@ SegBufPtr TcpInputQueuePop() {
 
 // TODO
 int TcpInit() {
+  RegisterInitSuccess();
+
   return 0;
 }
 

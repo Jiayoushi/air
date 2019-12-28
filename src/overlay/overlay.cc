@@ -6,6 +6,7 @@
 #include <atomic>
 #include <unordered_map>
 
+#include "air/air.h"
 #include "ntable.h"
 #include "ip/ip.h"
 
@@ -67,7 +68,7 @@ static void AcceptNeighbors() {
       exit(-1);
     }
 
-    std::cout << "accepted " << inet_ntoa(client_addr.sin_addr) << std::endl;
+    std::cout << "[OVERLAY]: accepted " << inet_ntoa(client_addr.sin_addr) << std::endl;
 
     nt.AddConnection(client_addr.sin_addr.s_addr, connfd);
   }
@@ -281,6 +282,8 @@ int OverlayInit() {
   for (auto p = nt.Begin(); p != nt.End(); ++p) {
     input_threads.emplace_back(Input, p->first);
   }
+
+  RegisterInitSuccess();
 
   std::cout << "[OVERLAY]: overlay started" << std::endl;
 

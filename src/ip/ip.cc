@@ -12,6 +12,7 @@
 #include "common/blocking_queue.h"
 #include "tcp/tcp.h"
 #include "overlay/overlay.h"
+#include "air/air.h"
 
 std::atomic<bool> running;
 
@@ -49,7 +50,10 @@ static void RouteUpdate() {
     pkt_buf->packet = std::make_shared<Packet>();
     pkt_buf->packet->header.dest_ip = kBroadcastIpAddr;
 
-    OverlaySend(pkt_buf);
+    // TODO
+    //pkt_buf->next_hop = 
+
+    //OverlaySend(pkt_buf);
 
     std::this_thread::sleep_for(kRouteUpdateIntervalInSecs);
   }
@@ -104,6 +108,8 @@ int IpInit() {
 
   std::thread input = std::thread(Input);
   std::thread update = std::thread(RouteUpdate);
+
+  RegisterInitSuccess();
 
   std::cout << "[IP] network layer started" << std::endl;
 
