@@ -37,6 +37,7 @@ int IpSend(SegBufPtr seg_buf) {
   pkt_buf->next_hop = seg_buf->dest_ip;
 
   OverlaySend(pkt_buf);
+  std::cout << "[IP] Sent packet " << pkt_buf << std::endl;
 
   return 0;
 }

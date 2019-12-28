@@ -6,8 +6,8 @@
 #include "common.h"
 
 /* Test */
-#define kPacketLossRate                 0.20
-#define kPacketErrorRate                0.20
+#define kPacketLossRate                 0
+#define kPacketErrorRate                0
 
 #define kGbnWindowSize                  5
 #define kUnsentCapacity                 100
