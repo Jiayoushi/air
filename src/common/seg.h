@@ -6,7 +6,6 @@
 #include <vector>
 #include <chrono>
 
-#include "constants.h"
 #include "common.h"
 
 struct Segment;
@@ -14,6 +13,9 @@ struct SegmentBuffer;
 typedef std::chrono::milliseconds Timepoint;
 typedef std::shared_ptr<Segment> SegPtr;
 typedef std::shared_ptr<SegmentBuffer> SegBufPtr;
+
+const size_t kMss                     = 512;
+
 
 enum SegmentType {
   kSyn,

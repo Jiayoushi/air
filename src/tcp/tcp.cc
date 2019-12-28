@@ -10,6 +10,9 @@ BlockingQueue<SegBufPtr> tcp_input;
 #define kSegmentError         1
 #define kSegmentIntact        2
 
+#define kPacketLossRate                 0
+#define kPacketErrorRate                0
+
 /*
   Artificial segment lost and invalid checksum
 */
