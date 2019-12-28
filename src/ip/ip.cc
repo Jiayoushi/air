@@ -23,8 +23,8 @@ BlockingQueue<PktBufPtr> ip_input;
 
 int IpSend(SegBufPtr seg_buf) {
   PktBufPtr pkt_buf = std::make_shared<PacketBuffer>();
-  pkt_buf->packet = std::make_shared<Packet>();
 
+  pkt_buf->packet = std::make_shared<Packet>();
   pkt_buf->packet->header.src_ip = seg_buf->src_ip;
   pkt_buf->packet->header.dest_ip = seg_buf->dest_ip;
   pkt_buf->packet->header.length = sizeof(PacketHeader) + 

@@ -59,6 +59,8 @@ int RecvPacket(PktPtr pkt, int conn);
 
 std::string PktToString(PktPtr pkt);
 
+char *IpStr(Ip ip);
+
 inline std::ostream &operator<<(std::ostream &out, PktBufPtr pkt_buf) {
   out << PktToString(pkt_buf->packet);
 
