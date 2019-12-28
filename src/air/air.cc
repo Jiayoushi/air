@@ -32,6 +32,8 @@ void RegisterInitSuccess() {
 }
 
 int Stop() {
+  running = 0;
+
   if (TcpStop() < 0) {
     std::cerr << "[AIR] tranposrt layer stop failed" << std::endl;
     return -1;

@@ -101,8 +101,10 @@ int test(const char *server_hostname, const char *server_port) {
     std::cerr << "fail to close srt server" << std::endl;
     exit(-1);
   }
+  std::cout << "[APP] closed" << std::endl;
 
   SrtServerShutdown();
+  std::cout << "[APP] shutdown" << std::endl;
 
   Stop();
   std::cerr << "Server stopped" << std::endl;

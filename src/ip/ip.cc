@@ -119,12 +119,10 @@ int IpInit() {
   std::cout << "[IP] network layer started" << std::endl;
 
   while (running)
-    std::this_thread::sleep_for(std::chrono::seconds(60));
+    std::this_thread::sleep_for(std::chrono::seconds(2));
 
   update.join();
   input.join();
-
-  OverlayStop();
 
   return 0;
 }

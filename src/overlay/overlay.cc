@@ -288,7 +288,7 @@ int OverlayInit() {
   std::cout << "[OVERLAY]: overlay started" << std::endl;
 
   while (running)
-    std::this_thread::sleep_for(std::chrono::seconds(60)); 
+    std::this_thread::sleep_for(std::chrono::seconds(2)); 
 
   for (int i = 0; i < nt.Size(); ++i)
     input_threads[i].join();
