@@ -9,8 +9,8 @@
 #define DEBUG_ENABLE
 
 #ifdef DEBUG_ENABLE
-  #define SDEBUG std::cerr << "SERVER: "
-  #define CDEBUG std::cerr << "CLIENT: "
+  #define SDEBUG std::cerr << "[TCP] "
+  #define CDEBUG std::cerr << "[TCP] "
 #else
   #define SDEBUG 0 && std::cout
   #define CDEBUG 0 && std::cout
