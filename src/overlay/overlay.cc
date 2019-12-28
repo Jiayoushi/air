@@ -146,6 +146,12 @@ static PktPtr OverlayRecv(int conn) {
 
   uint32_t idx = 0;
 
+  struct timeval tv;
+  tv.tv_sec = 1;
+  tv.tv_usec = 0;
+  setsockopt(conn, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+
+
   int state = kWaitFirstStart;
   char c;
   int recved = 0;
