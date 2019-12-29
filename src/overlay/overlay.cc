@@ -1,5 +1,6 @@
 #include "overlay.h"
 
+#include <signal.h>
 #include <unistd.h>
 #include <cstring>
 #include <thread>
@@ -151,7 +152,6 @@ static PktPtr OverlayRecv(int conn) {
   tv.tv_usec = 0;
   setsockopt(conn, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 
-
   int state = kWaitFirstStart;
   char c;
   int recved = 0;
@@ -250,8 +250,22 @@ Ip GetLocalIp() {
   return nt.GetLocalIp();
 }
 
+static void SigpipeHandler(int sig, siginfo_t *siginfo, void *context) {
+  OverlayStop();
+}
+
 int OverlayInit() {
   std::cout << "[OVERLAY]: Overlay layer starting ..." << std::endl;
+
+  struct sigaction act;
+  memset(&act, 0, sizeof(act));
+  act.sa_sigaction = SigpipeHandler;
+  act.sa_flags = SA_SIGINFO;
+
+  if (sigaction(SIGPIPE, &act, nullptr) < 0) {
+    perror("[OVERLAY]: sigaction");
+    return -1;
+  }
 
   nt.Init();
   struct in_addr t;
