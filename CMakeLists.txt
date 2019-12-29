@@ -34,15 +34,20 @@ add_executable(echo_client
                tests/echo/echo_client.cc)
 add_executable(echo_server
                tests/echo/echo_server.cc)
+add_executable(loop
+               tests/loop.cc)
 
 #target_compile_options(app_client PRIVATE -Wall -Wuninitialized)
 #target_compile_options(app_server PRIVATE -Wall -Wuninitialized)
 target_compile_options(unit_test PRIVATE -Wall -Wuninitialized)
 target_compile_options(file_client PRIVATE -Wall -Wuninitialized)
 target_compile_options(file_server PRIVATE -Wall -Wuninitialized)
+target_compile_options(loop PRIVATE -Wall -Wuninitialized)
+
 
 #target_link_libraries(app_client common_lib Threads::Threads)
 #target_link_libraries(app_server common_lib Threads::Threads)
 target_link_libraries(unit_test common_lib Threads::Threads)
 target_link_libraries(file_client common_lib Threads::Threads)
 target_link_libraries(file_server common_lib Threads::Threads)
+target_link_libraries(loop common_lib Threads::Threads)

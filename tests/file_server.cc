@@ -107,7 +107,7 @@ int test(const char *server_hostname, const char *server_port) {
   std::cout << "tcp shutdown" << std::endl;
 
   Stop();
-  std::cerr << "overlay stopped" << std::endl;
+  std::cerr << "Test success" << std::endl;
 
   return 0;
 }

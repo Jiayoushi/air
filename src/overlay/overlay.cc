@@ -279,7 +279,7 @@ int OverlayInit() {
   std::cout << "[OVERLAY]: accepting connections from other hosts" << std::endl;
   std::thread accept_neighbors(AcceptNeighbors);
 
-  sleep(3);
+  sleep(7);
 
   std::cout << "[OVERLAY]: connecting to other hosts" << std::endl;
   std::thread connect_neighbors(ConnectNeighbors);
