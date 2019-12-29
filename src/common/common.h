@@ -8,6 +8,7 @@
 
 #define DEBUG_ENABLE
 
+// TODO: all in one and add a lock
 #ifdef DEBUG_ENABLE
   #define SDEBUG std::cerr << "[TCP] "
   #define CDEBUG std::cerr << "[TCP] "
@@ -20,5 +21,6 @@
 typedef in_addr_t Ip;
 typedef uint32_t Cost;
 
+const Ip kInvalidIp = 0;
 
 #endif

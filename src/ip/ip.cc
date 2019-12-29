@@ -3,6 +3,7 @@
 #include <sys/types.h>
 #include <ifaddrs.h>
 #include <cstring>
+#include <sstream>
 #include <atomic>
 #include <thread>
 
@@ -11,15 +12,17 @@
 #include "common/pkt.h"
 #include "common/blocking_queue.h"
 #include "tcp/tcp.h"
+#include "ip/rtable.h"
 #include "overlay/overlay.h"
 #include "air/air.h"
+#include <cereal/archives/binary.hpp>
 
 std::atomic<bool> running;
 
-static int overlay_conn = -1;
-static int transport_conn = -1;
-
 BlockingQueue<PktBufPtr> ip_input;
+
+std::unordered_map<Ip, Cost> ncosts;          /* Cost of link from this host to neighbor host */
+RouteTable rtable;
 
 int IpSend(SegBufPtr seg_buf) {
   PktBufPtr pkt_buf = std::make_shared<PacketBuffer>();
@@ -43,20 +46,42 @@ int IpSend(SegBufPtr seg_buf) {
   return 0;
 }
 
-// TODO
+static void Broadcast(PktBufPtr pkt_buf) {
+  std::unordered_set<Ip> next_hop;
+
+  for (auto p = rtable.Begin(); p != rtable.End(); ++p) {
+    if (next_hop.find(p->second) != next_hop.end() || p->second == kInvalidIp)
+      continue;
+
+    next_hop.insert(p->second);
+    pkt_buf->next_hop = p->second;
+    OverlaySend(pkt_buf);
+  }
+}
+
 static void RouteUpdate() {
   while (running) {
     PktBufPtr pkt_buf = std::make_shared<PacketBuffer>();
     pkt_buf->packet = std::make_shared<Packet>();
-    pkt_buf->packet->header.dest_ip = kBroadcastIpAddr;
+    pkt_buf->packet->header.type = kRouteUpdate;
 
-    // TODO
-    //pkt_buf->next_hop = 
+    /* Serialize route table and copy into packet's data */
+    std::stringstream ss;
+    cereal::BinaryOutputArchive o_archive(ss);
+    o_archive(rtable);
+    std::string s = ss.str();
+    memcpy(pkt_buf->packet->data, s.c_str(), s.size());
 
-    //OverlaySend(pkt_buf);
+    pkt_buf->packet->header.length = sizeof(PacketHeader) + s.size();
+
+    Broadcast(pkt_buf);
 
     std::this_thread::sleep_for(kRouteUpdateIntervalInSecs);
   }
+}
+
+static void UpdateRoutingTable(std::shared_ptr<RouteTable> rt) {
+  std::cout << "[IP] recived routing table" << std::endl;
 }
 
 int IpInputQueuePush(PktBufPtr pkt_buf) {
@@ -88,6 +113,18 @@ static int Forward(PktBufPtr pkt_buf) {
   return 0;
 }
 
+static RtPtr PacketBufferToRouteTable(PktBufPtr pkt_buf) {
+  RtPtr rt = std::make_shared<RouteTable>();
+
+  std::string s(pkt_buf->packet->data, pkt_buf->packet->header.length - sizeof(PacketHeader));
+  std::stringstream ss(s);
+  cereal::BinaryInputArchive i_archive(ss);
+
+  i_archive(*rt.get());
+
+  return rt;
+}
+
 static void Input() {
   while (running) {
     PktBufPtr pkt_buf = IpInputQueuePop();
@@ -95,11 +132,17 @@ static void Input() {
     if (!running)
       return;
 
-    if (!pkt_buf) {
+    if (!pkt_buf)
       continue;
+
+    if (pkt_buf->packet->header.type == kRouteUpdate) {
+      UpdateRoutingTable(PacketBufferToRouteTable(pkt_buf));
+
+      // TODO: relay to other hosts
+    } else {
+      Forward(pkt_buf);
     }
 
-    Forward(pkt_buf);
     std::cout << "[IP] received packet " << pkt_buf << std::endl;
   }
 }
@@ -110,8 +153,63 @@ int IpStop() {
   return 0;
 }
 
+static void InitNeighborCost() {
+  std::vector<std::pair<Ip, Cost>> costs = GetDirectNeighborCost();
+
+  std::cout << costs.size() << std::endl;
+  for (std::pair<Ip, Cost> cost: costs) {
+    ncosts[cost.first] = cost.second;
+    std::cout << "[IP] " << cost.first << " " << cost.second << std::endl;
+  }
+}
+
+static void InitRouteTable() {
+  for (auto p = ncosts.begin(); p != ncosts.end(); ++p) {
+    if (p->second != std::numeric_limits<Cost>::max())
+      rtable.SetNextHop(p->first, p->first);
+    else
+      rtable.SetNextHop(p->first, kInvalidIp);
+  }
+}
+
+Ip GetLocalIp() {
+  static Ip local_ip = 0;
+
+  if (local_ip != 0)
+    return local_ip;
+
+  struct ifaddrs *ifaddr, *ifa;
+
+  if (getifaddrs(&ifaddr) < 0) {
+    perror("getifaddres failed");
+    return -1;
+  }
+
+  for (struct ifaddrs *ifa = ifaddr; ifa != nullptr;
+       ifa = ifa->ifa_next) {
+    if (!ifa->ifa_addr)
+      continue;
+
+    int family = ifa->ifa_addr->sa_family;
+    if (family == AF_INET) {
+      struct sockaddr_in *addr = (struct sockaddr_in *)ifa->ifa_addr;
+      if (addr->sin_addr.s_addr != 16777343) {
+	local_ip = addr->sin_addr.s_addr;
+	freeifaddrs(ifaddr);
+        return local_ip;
+      }
+    }
+  }
+
+  freeifaddrs(ifaddr);
+  return 0;
+}
+
 int IpInit() {
   std::cout << "[IP] network layer starting ..." << std::endl;
+
+  InitNeighborCost();
+  InitRouteTable();
 
   running = true;
 
@@ -130,33 +228,5 @@ int IpInit() {
 
   std::cout << "[IP] exited" << std::endl;
 
-  return 0;
-}
-
-Ip GetLocalIp() {
- struct ifaddrs *ifaddr, *ifa;
-
-  if (getifaddrs(&ifaddr) < 0) {
-    perror("getifaddres failed");
-    return -1;
-  }
-
-  for (struct ifaddrs *ifa = ifaddr; ifa != nullptr;
-       ifa = ifa->ifa_next) {
-    if (!ifa->ifa_addr)
-      continue;
-
-    int family = ifa->ifa_addr->sa_family;
-    if (family == AF_INET) {
-      struct sockaddr_in *addr = (struct sockaddr_in *)ifa->ifa_addr;
-      if (addr->sin_addr.s_addr != 16777343) {
-	Ip ip = addr->sin_addr.s_addr;
-	freeifaddrs(ifaddr);
-        return ip;
-      }
-    }
-  }
-
-  freeifaddrs(ifaddr);
   return 0;
 }

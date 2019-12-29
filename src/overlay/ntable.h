@@ -56,10 +56,6 @@ inline size_t NeighborTable::Size() const {
   return neighbors_.size();
 }
 
-inline Cost NeighborTable::GetCost(Ip from_ip, Ip to_ip) const {
-  return neighbors_.at(from_ip).costs.at(to_ip);
-}
-
 inline Cost NeighborTable::AddCost(Ip from_ip, Ip to_ip, Cost cost) {
   return neighbors_[from_ip].costs[to_ip] = cost;
 }

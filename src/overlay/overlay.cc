@@ -258,6 +258,20 @@ static int RegisterSigpipeHandler() {
   return 0;
 }
 
+std::vector<std::pair<Ip, Cost>> GetDirectNeighborCost() {
+  while (!running)
+    sleep(1);
+
+  std::vector<std::pair<Ip, Cost>> costs;
+
+  Ip local_ip = GetLocalIp();
+ 
+  for (auto p = nt.Begin(); p != nt.End(); ++p)
+    costs.push_back({p->first, nt.GetCost(p->first, local_ip)});
+
+  return costs;
+}
+
 int OverlayInit() {
   std::cout << "[OVERLAY] Overlay layer starting ..." << std::endl;
 
@@ -283,10 +297,8 @@ int OverlayInit() {
   accept_neighbors.join();
   connect_neighbors.join();
 
-
   /* Connection to other hosts are established */
   std::cout << "[OVERLAY] topology established" << std::endl;
-
 
   running = true;
   /* Keep receiving packets from neighbors */

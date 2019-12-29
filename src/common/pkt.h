@@ -17,7 +17,7 @@ typedef std::shared_ptr<PacketBuffer> PktBufPtr;
 
 
 enum PacketType {
-  kRouteType,           /* It's a packet for updating route table */
+  kRouteUpdate,           /* It's a packet for updating route table */
   kSnp                  /* A general application packet sending */
 };
 
@@ -39,20 +39,6 @@ struct PacketBuffer {
 
   Ip next_hop;
 };
-
-/*
- * Routing Update
- */
-struct RouteTableEntry {
-  Ip ip;
-  Cost cost;
-};
-
-struct RouteUpdate {
-  uint32_t entry_count;
-  RouteTableEntry entry[kMaxHostNum];
-};
-
 
 int SendPacket(PktPtr pkt, int conn);
 int RecvPacket(PktPtr pkt, int conn);

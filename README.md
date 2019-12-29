@@ -5,5 +5,5 @@ Status: [ONGOING]
 TODO:
 - fix close wait
 - two-way handshake -> three-way
-- add window size option
-- 
+- reverse path forwarding
+- c/s -> tcp

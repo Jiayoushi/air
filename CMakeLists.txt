@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 include_directories(src)
+include_directories(lib)
 
 add_library(common_lib
             src/common/seg.cc
@@ -14,16 +15,13 @@ add_library(common_lib
             src/common/pkt.cc
             src/tcp/tcp.cc
             src/ip/ip.cc
+            src/ip/rtable.cc
             src/overlay/overlay.cc
             src/overlay/ntable.cc
             src/client/srt_client.cc
             src/server/srt_server.cc
             src/air/air.cc)
 
-#add_executable(app_client
-#               tests/app_client.cc)
-#add_executable(app_server
-#               tests/app_server.cc)
 add_executable(unit_test
                tests/unit_test.cc)
 add_executable(file_client
@@ -37,16 +35,11 @@ add_executable(echo_server
 add_executable(loop
                tests/loop.cc)
 
-#target_compile_options(app_client PRIVATE -Wall -Wuninitialized)
-#target_compile_options(app_server PRIVATE -Wall -Wuninitialized)
 target_compile_options(unit_test PRIVATE -Wall -Wuninitialized)
 target_compile_options(file_client PRIVATE -Wall -Wuninitialized)
 target_compile_options(file_server PRIVATE -Wall -Wuninitialized)
 target_compile_options(loop PRIVATE -Wall -Wuninitialized)
 
-
-#target_link_libraries(app_client common_lib Threads::Threads)
-#target_link_libraries(app_server common_lib Threads::Threads)
 target_link_libraries(unit_test common_lib Threads::Threads)
 target_link_libraries(file_client common_lib Threads::Threads)
 target_link_libraries(file_server common_lib Threads::Threads)

@@ -27,6 +27,9 @@ int NeighborTable::ReadCostTable(const std::string &filename) {
 
     file >> from_ip_str;
 
+    if (from_ip_str == "#")
+      continue;
+
     if (file.eof())
       break;
 
@@ -53,4 +56,13 @@ int NeighborTable::AddConnection(Ip ip, int conn) {
 
   neighbors_[ip].conn = conn;
   return 0;
+}
+
+/* Make sure from_ip is inside the table, otherwise crash directly */
+Cost NeighborTable::GetCost(Ip from_ip, Ip to_ip) const {
+  auto p = neighbors_.at(from_ip).costs.find(to_ip);
+  if (p != neighbors_.at(from_ip).costs.end())
+    return p->second;
+  else
+    return std::numeric_limits<uint32_t>::max();
 }
