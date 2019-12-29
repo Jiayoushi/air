@@ -13,5 +13,6 @@ int IpInit();
 int IpInputQueuePush(PktBufPtr pkt_buf);
 PktBufPtr IpInputQueuePop();
 
+Ip GetLocalIp();
 
 #endif

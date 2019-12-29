@@ -246,10 +246,6 @@ int OverlayStop() {
   return 0;
 }
 
-Ip GetLocalIp() {
-  return nt.GetLocalIp();
-}
-
 static void SigpipeHandler(int sig, siginfo_t *siginfo, void *context) {
   OverlayStop();
 }
