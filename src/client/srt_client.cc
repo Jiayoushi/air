@@ -293,7 +293,7 @@ static int Input(SegBufPtr seg_buf) {
         break;
 
       size_t acked = tcb->send_buffer.Ack(seg->header.ack);
-      CDEBUG << "ACKED: " << acked << "unacked: " << tcb->send_buffer.Unacked() << " unsent: " << tcb->send_buffer.Unsent() << std::endl;
+      CDEBUG << "ACKED: " << acked << " UNACKED: " << tcb->send_buffer.Unacked() << " UNSENT: " << tcb->send_buffer.Unsent() << std::endl;
       if (acked == 0)
         break;
 
