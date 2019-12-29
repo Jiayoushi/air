@@ -150,10 +150,13 @@ Ip GetLocalIp() {
     if (family == AF_INET) {
       struct sockaddr_in *addr = (struct sockaddr_in *)ifa->ifa_addr;
       if (addr->sin_addr.s_addr != 16777343) {
-        return addr->sin_addr.s_addr;
+	Ip ip = addr->sin_addr.s_addr;
+	freeifaddrs(ifaddr);
+        return ip;
       }
     }
   }
 
+  freeifaddrs(ifaddr);
   return 0;
 }

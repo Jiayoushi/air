@@ -16,14 +16,9 @@
 #define kWaitFirstEnd         2
 #define kWaitSecondEnd        3
 
-Ip local_ip;
-
 const uint16_t kOverlayPort = 6553;    /* Same for all hosts */
 
 NeighborTable nt;
-
-int listen_fd = -1;
-int network_conn = -1;
 
 static std::atomic<bool> running;
 
@@ -69,12 +64,12 @@ static void AcceptNeighbors() {
       exit(-1);
     }
 
-    std::cout << "[OVERLAY]: accepted " << inet_ntoa(client_addr.sin_addr) << std::endl;
+    std::cout << "[OVERLAY] accepted " << inet_ntoa(client_addr.sin_addr) << std::endl;
 
     nt.AddConnection(client_addr.sin_addr.s_addr, connfd);
   }
 
-  std::cout << "[OVERLAY]: accepting terminated" << std::endl;
+  std::cout << "[OVERLAY] accepting terminated" << std::endl;
 }
 
 static int ConnectNeighbors() {
@@ -84,7 +79,7 @@ static int ConnectNeighbors() {
 
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
-      perror("[OVERLAY]: cannot create socket");
+      perror("[OVERLAY] cannot create socket");
       exit(-1);
     }
   
@@ -102,17 +97,17 @@ static int ConnectNeighbors() {
     struct in_addr a;
     a.s_addr = p->first;
 
-    std::cout << "[OVERLAY]: Connecting to " << inet_ntoa(a) << std::endl;
+    std::cout << "[OVERLAY] Connecting to " << inet_ntoa(a) << std::endl;
     if (connect(sockfd, (const struct sockaddr *)&neighbor_addr, sizeof(neighbor_addr)) < 0) {
-      perror("[OVERLAY]: connect failed");
+      perror("[OVERLAY] connect failed");
       exit(-1);
     }
-    std::cout << "[OVERLAY]: connected to " << inet_ntoa(a) << std::endl;
+    std::cout << "[OVERLAY] connected to " << inet_ntoa(a) << std::endl;
 
     nt.AddConnection(p->first, sockfd);
   }
  
-  std::cout << "[OVERLAY]: connection terminated" << std::endl;
+  std::cout << "[OVERLAY] connection terminated" << std::endl;
   return 0; 
 }
 
@@ -250,38 +245,39 @@ static void SigpipeHandler(int sig, siginfo_t *siginfo, void *context) {
   OverlayStop();
 }
 
-int OverlayInit() {
-  std::cout << "[OVERLAY]: Overlay layer starting ..." << std::endl;
-
+static int RegisterSigpipeHandler() {
   struct sigaction act;
   memset(&act, 0, sizeof(act));
   act.sa_sigaction = SigpipeHandler;
   act.sa_flags = SA_SIGINFO;
 
   if (sigaction(SIGPIPE, &act, nullptr) < 0) {
-    perror("[OVERLAY]: sigaction");
+    perror("[OVERLAY] sigaction");
     return -1;
   }
+  return 0;
+}
+
+int OverlayInit() {
+  std::cout << "[OVERLAY] Overlay layer starting ..." << std::endl;
+
+  if (RegisterSigpipeHandler() < 0)
+    exit(-1);
 
   nt.Init();
-  struct in_addr t;
-  t.s_addr = GetLocalIp();
-  std::cout << "[OVERLAY]: Local ip " << inet_ntoa(t) << std::endl;
 
-  std::cout << "[OVERLAY]: Printing neighbors' ip addresses" << std::endl;
-  for (auto p = nt.Begin(); p != nt.End(); ++p) {
-    struct in_addr a;
-    a.s_addr = p->first;
+  std::cout << "[OVERLAY] Local ip " << IpStr(GetLocalIp()) << std::endl;
 
-    std::cout << "[OVERLAY]: " << inet_ntoa(a) << std::endl;
-  }
+  std::cout << "[OVERLAY] Neighbors Ip " << std::endl;
+  for (auto p = nt.Begin(); p != nt.End(); ++p)
+    std::cout << "[OVERLAY] " << IpStr(p->first) << std::endl;
  
-  std::cout << "[OVERLAY]: accepting connections from other hosts" << std::endl;
+  std::cout << "[OVERLAY] accepting connections from other hosts" << std::endl;
   std::thread accept_neighbors(AcceptNeighbors);
 
   sleep(7);
 
-  std::cout << "[OVERLAY]: connecting to other hosts" << std::endl;
+  std::cout << "[OVERLAY] connecting to other hosts" << std::endl;
   std::thread connect_neighbors(ConnectNeighbors);
 
   accept_neighbors.join();
@@ -289,7 +285,7 @@ int OverlayInit() {
 
 
   /* Connection to other hosts are established */
-  std::cout << "[OVERLAY]: topology established" << std::endl;
+  std::cout << "[OVERLAY] topology established" << std::endl;
 
 
   running = true;
@@ -301,7 +297,7 @@ int OverlayInit() {
 
   RegisterInitSuccess();
 
-  std::cout << "[OVERLAY]: overlay started" << std::endl;
+  std::cout << "[OVERLAY] overlay started" << std::endl;
 
   while (running)
     std::this_thread::sleep_for(std::chrono::seconds(2)); 
@@ -309,7 +305,7 @@ int OverlayInit() {
   for (int i = 0; i < nt.Size(); ++i)
     input_threads[i].join();
 
-  std::cout << "[OVERLAY]: exited." << std::endl;
+  std::cout << "[OVERLAY] exited." << std::endl;
 
   return 0;
 }

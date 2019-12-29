@@ -24,3 +24,4 @@ echo_client
 echo_server
 air_client
 air_server
+vgcore.*

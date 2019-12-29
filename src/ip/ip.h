@@ -4,8 +4,6 @@
 #include "common/pkt.h"
 #include "common/seg.h"
 
-extern Ip local_ip;
-
 int IpSend(SegBufPtr seg_buf);
 int IpStop();
 int IpInit();
