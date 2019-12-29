@@ -67,7 +67,7 @@ int test(const char *server_hostname, const char *server_port) {
   SrtClientSend(sockfd, str.c_str(), len);
   std::cerr << "file sent." << std::endl;
 
-  sleep(3);
+  sleep(6);
 
   if(SrtClientDisconnect(sockfd) < 0) {
     std::cerr << "fail to disconnect from srt server" << std::endl;

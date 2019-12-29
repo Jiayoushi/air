@@ -36,6 +36,8 @@ class SendBuffer {
   void Clear();
   void PopUnsentFront();
 
+  size_t Unacked() { return unacked_.size(); }
+  size_t Unsent() { return unsent_.size(); }
   bool Full() const;
   bool Timeout() const;
   bool MaxRetryReached() const;

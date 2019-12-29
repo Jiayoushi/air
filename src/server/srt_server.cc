@@ -229,6 +229,7 @@ size_t SrtServerRecv(int sockfd, void *buffer, unsigned int length) {
 
   size_t recved = 0;
   while (recved < length) {
+    SDEBUG << "TOTAL " << recved << " expect " << length << std::endl;
     tcb->waiting.wait(lk,
       [&tcb] {
         return !tcb->recv_buffer.Empty();
