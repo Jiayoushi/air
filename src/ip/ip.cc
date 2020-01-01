@@ -1,5 +1,8 @@
 #include "ip.h"
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <sys/types.h>
 #include <ifaddrs.h>
@@ -8,22 +11,21 @@
 #include <atomic>
 #include <thread>
 
+#include <cereal/archives/binary.hpp>
+#include "air/air.h"
 #include "common/common.h"
 #include "common/seg.h"
 #include "common/pkt.h"
 #include "common/blocking_queue.h"
 #include "tcp/tcp.h"
-#include "ip/rtable.h"
+#include "ip/dv.h"
 #include "overlay/overlay.h"
-#include "air/air.h"
-#include <cereal/archives/binary.hpp>
 
 std::atomic<bool> running;
 
 BlockingQueue<PktBufPtr> ip_input;
-
-std::unordered_map<Ip, Cost> ncosts;          /* Cost of link from this host to neighbor host */
-RouteTable rtable;
+DistanceVector dv;
+std::unordered_map<Ip, Ip> rtable;
 
 int IpSend(SegBufPtr seg_buf) {
   PktBufPtr pkt_buf = std::make_shared<PacketBuffer>();
@@ -47,10 +49,10 @@ int IpSend(SegBufPtr seg_buf) {
   return 0;
 }
 
-static void Broadcast(PktBufPtr pkt_buf) {
+static void BroadcastOnce(PktBufPtr pkt_buf) {
   std::unordered_set<Ip> next_hop;
 
-  for (auto p = rtable.Begin(); p != rtable.End(); ++p) {
+  for (auto p = rtable.begin(); p != rtable.end(); ++p) {
     if (next_hop.find(p->second) != next_hop.end() || p->second == kInvalidIp)
       continue;
 
@@ -60,29 +62,43 @@ static void Broadcast(PktBufPtr pkt_buf) {
   }
 }
 
-static void RouteUpdate() {
+static PktBufPtr CreateDistanceVectorPacket() {
+  PktBufPtr pkt_buf = std::make_shared<PacketBuffer>();
+  pkt_buf->packet = std::make_shared<Packet>();
+  pkt_buf->packet->header.type = kRouteUpdate;
+  pkt_buf->packet->header.src_ip = GetLocalIp();
+
+  /* Serialize route table and copy into packet's data */
+  std::stringstream ss;
+  cereal::BinaryOutputArchive o_archive(ss);
+  o_archive(rtable);
+  std::string s = ss.str();
+  memcpy(pkt_buf->packet->data, s.c_str(), s.size());
+  pkt_buf->packet->header.length = sizeof(PacketHeader) + s.size();
+
+  return pkt_buf;
+}
+
+static void Broadcast() {
   while (running) {
-    PktBufPtr pkt_buf = std::make_shared<PacketBuffer>();
-    pkt_buf->packet = std::make_shared<Packet>();
-    pkt_buf->packet->header.type = kRouteUpdate;
+    PktBufPtr dv_pkt = CreateDistanceVectorPacket();
 
-    /* Serialize route table and copy into packet's data */
-    std::stringstream ss;
-    cereal::BinaryOutputArchive o_archive(ss);
-    o_archive(rtable);
-    std::string s = ss.str();
-    memcpy(pkt_buf->packet->data, s.c_str(), s.size());
-
-    pkt_buf->packet->header.length = sizeof(PacketHeader) + s.size();
-
-    Broadcast(pkt_buf);
+    BroadcastOnce(dv_pkt);
 
     std::this_thread::sleep_for(kRouteUpdateIntervalInSecs);
   }
 }
 
-static void UpdateRoutingTable(std::shared_ptr<RouteTable> rt) {
-  std::cout << "[IP] recived routing table" << std::endl;
+static void UpdateDistanceVector(DvPtr dv) {
+
+}
+
+static void UpdateRouteTable() {
+}
+
+static void Update(DvPtr dv) {
+  UpdateDistanceVector(dv);
+  UpdateRouteTable();
 }
 
 int IpInputQueuePush(PktBufPtr pkt_buf) {
@@ -114,18 +130,6 @@ static int Forward(PktBufPtr pkt_buf) {
   return 0;
 }
 
-static RtPtr PacketBufferToRouteTable(PktBufPtr pkt_buf) {
-  RtPtr rt = std::make_shared<RouteTable>();
-
-  std::string s(pkt_buf->packet->data, pkt_buf->packet->header.length - sizeof(PacketHeader));
-  std::stringstream ss(s);
-  cereal::BinaryInputArchive i_archive(ss);
-
-  i_archive(*rt.get());
-
-  return rt;
-}
-
 static void Input() {
   while (running) {
     PktBufPtr pkt_buf = IpInputQueuePop();
@@ -137,7 +141,7 @@ static void Input() {
       continue;
 
     if (pkt_buf->packet->header.type == kRouteUpdate) {
-      UpdateRoutingTable(PacketBufferToRouteTable(pkt_buf));
+      Update(DistanceVector::Deserialize(pkt_buf));
 
       // TODO: relay to other hosts
     } else {
@@ -154,22 +158,23 @@ int IpStop() {
   return 0;
 }
 
-static void InitNeighborCost() {
-  std::vector<std::pair<Ip, Cost>> costs = GetDirectNeighborCost();
+static void InitDistanceVector() {
+  std::vector<std::pair<Ip, Cost>> costs = GetCost();
 
-  std::cout << costs.size() << std::endl;
+  std::cout << "[IP] " << "Initial Distance Vector " << std::endl;
   for (std::pair<Ip, Cost> cost: costs) {
-    ncosts[cost.first] = cost.second;
-    std::cout << "[IP] " << cost.first << " " << cost.second << std::endl;
+    dv[cost.first] = cost.second;
+    std::cout << "[IP] " << IpStr(cost.first) << " " << cost.second << std::endl;
   }
 }
 
 static void InitRouteTable() {
-  for (auto p = ncosts.begin(); p != ncosts.end(); ++p) {
-    if (p->second != std::numeric_limits<Cost>::max())
-      rtable.SetNextHop(p->first, p->first);
-    else
-      rtable.SetNextHop(p->first, kInvalidIp);
+  std::cout << "[IP] " << "Initial Route Table " << std::endl;
+  for (auto p = dv.Begin(); p != dv.End(); ++p) {
+    if (p->second != std::numeric_limits<Cost>::max()) {
+      std::cout << "[IP] " << IpStr(p->first) << " " << IpStr(p->first) << std::endl;
+      rtable[p->first] = p->first;
+    }
   }
 }
 
@@ -206,13 +211,12 @@ Ip GetLocalIp() {
   return 0;
 }
 
-int HostnameToIp(const char *hostname)
-{
+int HostnameToIp(const char *hostname) {
   struct hostent *he;
   struct in_addr **addr_list;
   int i;
   if ((he = gethostbyname(hostname)) == nullptr) {
-    perror("get host info");
+    perror("gethostbyname");
     return -1;
   }
 
@@ -228,13 +232,13 @@ int HostnameToIp(const char *hostname)
 int IpInit() {
   std::cout << "[IP] network layer starting ..." << std::endl;
 
-  InitNeighborCost();
+  InitDistanceVector();
   InitRouteTable();
 
   running = true;
 
   std::thread input = std::thread(Input);
-  std::thread update = std::thread(RouteUpdate);
+  std::thread broadcast = std::thread(Broadcast);
 
   RegisterInitSuccess();
 
@@ -243,7 +247,7 @@ int IpInit() {
   while (running)
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
-  update.join();
+  broadcast.join();
   input.join();
 
   std::cout << "[IP] exited" << std::endl;

@@ -39,8 +39,6 @@ int NeighborTable::ReadCostTable(const std::string &filename) {
     if (file.eof())
       break;
 
-    //Ip from_ip = inet_addr(from_ip_str.c_str());
-    //Ip to_ip = inet_addr(to_ip_str.c_str());
     Ip from_ip = HostnameToIp(from_ip_str.c_str());
     Ip to_ip = HostnameToIp(to_ip_str.c_str());
 
@@ -62,6 +60,9 @@ int NeighborTable::AddConnection(Ip ip, int conn) {
 
 /* Make sure from_ip is inside the table, otherwise crash directly */
 Cost NeighborTable::GetCost(Ip from_ip, Ip to_ip) const {
+  if (from_ip == GetLocalIp() && to_ip == GetLocalIp())
+    return 0;
+
   auto p = neighbors_.at(from_ip).costs.find(to_ip);
   if (p != neighbors_.at(from_ip).costs.end())
     return p->second;

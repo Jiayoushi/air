@@ -97,7 +97,6 @@ static int ConnectNeighbors() {
     struct in_addr a;
     a.s_addr = p->first;
 
-    std::cout << "[OVERLAY] Connecting to " << inet_ntoa(a) << std::endl;
     if (connect(sockfd, (const struct sockaddr *)&neighbor_addr, sizeof(neighbor_addr)) < 0) {
       perror("[OVERLAY] connect failed");
       exit(-1);
@@ -258,16 +257,14 @@ static int RegisterSigpipeHandler() {
   return 0;
 }
 
-std::vector<std::pair<Ip, Cost>> GetDirectNeighborCost() {
+std::vector<std::pair<Ip, Cost>> GetCost() {
   while (!running)
     sleep(1);
 
   std::vector<std::pair<Ip, Cost>> costs;
 
-  Ip local_ip = GetLocalIp();
- 
   for (auto p = nt.Begin(); p != nt.End(); ++p)
-    costs.push_back({p->first, nt.GetCost(p->first, local_ip)});
+    costs.push_back({p->first, nt.GetCost(p->first, GetLocalIp())});
 
   return costs;
 }
@@ -280,12 +277,6 @@ int OverlayInit() {
 
   nt.Init();
 
-  std::cout << "[OVERLAY] Local ip " << IpStr(GetLocalIp()) << std::endl;
-
-  std::cout << "[OVERLAY] Neighbors Ip " << std::endl;
-  for (auto p = nt.Begin(); p != nt.End(); ++p)
-    std::cout << "[OVERLAY] " << IpStr(p->first) << std::endl;
- 
   std::cout << "[OVERLAY] accepting connections from other hosts" << std::endl;
   std::thread accept_neighbors(AcceptNeighbors);
 
