@@ -15,6 +15,7 @@ add_library(common_lib
             src/common/pkt.cc
             src/tcp/tcp.cc
             src/ip/ip.cc
+            src/ip/dvt.cc
             src/overlay/overlay.cc
             src/overlay/ntable.cc
             src/client/srt_client.cc

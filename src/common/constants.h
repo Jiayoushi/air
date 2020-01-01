@@ -12,7 +12,7 @@
 
 #define kTimeoutIntervalInMs            6000
 
-const std::chrono::seconds kRouteUpdateIntervalInSecs(4);
+const std::chrono::seconds kRouteUpdateIntervalInSecs(8);
 const Ip     kBroadcastIpAddr         = 0;
 const size_t kMaxPacketData           = 512 + sizeof(SegmentHeader);
 const size_t kMaxHostNum              = 1024;
