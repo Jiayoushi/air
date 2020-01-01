@@ -24,6 +24,8 @@ std::atomic<bool> running;
 
 BlockingQueue<PktBufPtr> ip_input;
 Dvt dvt;
+
+std::mutex rt_lock;
 std::unordered_map<Ip, Ip> rtable;
 
 int IpSend(SegBufPtr seg_buf) {
@@ -39,6 +41,7 @@ int IpSend(SegBufPtr seg_buf) {
 
   memcpy(pkt_buf->packet->data, seg_buf->segment.get(), seg_buf->data_size + sizeof(SegmentHeader));
 
+  std::lock_guard<std::mutex> lock(rt_lock);
   auto p = rtable.find(seg_buf->dest_ip);
   if (p == rtable.end())
     return -1;
@@ -64,16 +67,9 @@ static void BroadcastOnce(PktBufPtr pkt_buf) {
   }
 }
 
-static void Broadcast() {
-  while (running) {
-    PktBufPtr dv_pkt = dvt.CreatePacket();
-    BroadcastOnce(dv_pkt);
-
-    std::this_thread::sleep_for(kRouteUpdateIntervalInSecs);
-  }
-}
-
-static void UpdateRouteTable() {
+static void  BroadcastInitalRouteInfo() {
+  PktBufPtr dv_pkt = dvt.CreatePacket();
+  BroadcastOnce(dv_pkt);
 }
 
 int IpInputQueuePush(PktBufPtr pkt_buf) {
@@ -105,6 +101,24 @@ static int Forward(PktBufPtr pkt_buf) {
   return 0;
 }
 
+static void UpdateRouteTable(const HopMap &map) {
+  std::lock_guard<std::mutex> lock(rt_lock);
+  for (auto p = map.cbegin(); p != map.cend(); ++p)
+    rtable[p->first] = p->second;
+
+  if (!map.empty()) {
+    PktBufPtr dv_pkt = dvt.CreatePacket();
+    BroadcastOnce(dv_pkt);
+  }
+
+#ifdef DEBUG_ROUTING
+  std::cout << "[IP] Route Table possibly updated ";
+  for (auto p = rtable.begin(); p != rtable.end(); ++p)
+    std::cout << IpStr(p->first) << "->" << IpStr(p->second) << " ";
+  std::cout << std::endl;
+#endif
+}
+
 static void Input() {
   while (running) {
     PktBufPtr pkt_buf = IpInputQueuePop();
@@ -115,11 +129,16 @@ static void Input() {
     if (!pkt_buf)
       continue;
 
+#ifdef DEBUG_ROUTING
     std::cout << "[IP] received packet " << pkt_buf << std::endl;
+#else
+    if (pkt_buf->packet->header.type != kRouteUpdate)
+      std::cout << "[IP] received packet " << pkt_buf << std::endl;
+#endif
 
     if (pkt_buf->packet->header.type == kRouteUpdate) {
-      dvt.Update(pkt_buf->packet);
-      UpdateRouteTable();
+      HopMap map = dvt.Update(pkt_buf->packet);
+      UpdateRouteTable(map);
     } else {
       Forward(pkt_buf);
     }
@@ -195,23 +214,18 @@ int IpInit() {
 
   dvt.Init(GetLocalIp());
   InitRouteTable();
-
   running = true;
 
   std::thread input = std::thread(Input);
-  std::thread broadcast = std::thread(Broadcast);
+  BroadcastInitalRouteInfo();
 
   RegisterInitSuccess();
-
   std::cout << "[IP] network layer started" << std::endl;
 
   while (running)
     std::this_thread::sleep_for(std::chrono::seconds(2));
 
-  broadcast.join();
   input.join();
-
   std::cout << "[IP] exited" << std::endl;
-
   return 0;
 }

@@ -11,6 +11,7 @@
 
 class Dvt;
 
+typedef std::unordered_map<Ip, Ip> HopMap;
 typedef std::unordered_map<Ip, Cost> Dv;  /* Distance Vector */
 typedef std::shared_ptr<Dv> DvPtr;
 typedef std::shared_ptr<Dvt> DvtPtr;
@@ -23,7 +24,7 @@ class Dvt {
   mutable std::mutex mtx_;
  public:
   int Init(Ip local_ip);
-  void Update(PktPtr pkt);
+  HopMap Update(PktPtr pkt);
 
   /* Deserialize a distance vector received from other hosts */
   static DvPtr Deserialize(PktPtr pkt) {

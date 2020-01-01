@@ -19,7 +19,6 @@ int Dvt::Init(Ip local_ip) {
   for (std::pair<Ip, Cost> cost: costs)
     costs_[local_ip_][cost.first] = cost.second;
 
-
   costs_[local_ip_][local_ip_] = 0;
   return 0;
 }
@@ -61,21 +60,19 @@ void Dvt::Print(int option) const {
   }
 }
 
-void Dvt::Update(PktPtr pkt) {
+HopMap Dvt::Update(PktPtr pkt) {
   std::lock_guard<std::mutex> lck(mtx_);
 
   DvPtr in_dv = Dvt::Deserialize(pkt);
   
   if (costs_.find(pkt->header.src_ip) == costs_.end())
-    return;
-
-  Print(0);
-
-  std::cout << std::endl;
+    return HopMap();
 
   /* Update */
   costs_[pkt->header.src_ip] = *in_dv.get();
   
+  HopMap map;
+
   /* Calculate shortest path */
   for (auto p = costs_.begin(); p != costs_.end(); ++p) {
     for (auto x = costs_[local_ip_].begin(); x != costs_[local_ip_].end(); ++x) {
@@ -88,13 +85,16 @@ void Dvt::Update(PktPtr pkt) {
           GetCost(local_ip_, nbr) == kInvalidCost)
         continue;
 
-      costs_[local_ip_][dest] = std::min(costs_[local_ip_][dest], GetCost(local_ip_, nbr) + costs_[nbr][dest]);
+      Cost new_cost = GetCost(local_ip_, nbr) + costs_[nbr][dest];
+
+      if (new_cost < costs_[local_ip_][dest]) {
+        costs_[local_ip_][dest] = new_cost;
+	map[dest] = nbr;
+      }
     }
   }
 
-  Print(0);
-
-  std::cout << std::endl;
+  return map;
 }
 
 std::vector<Ip> Dvt::Neighbors() const {

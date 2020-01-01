@@ -19,6 +19,8 @@
   #define CDEBUG 0 && std::cout
 #endif
 
+#define DEBUG_ROUTING
+
 typedef in_addr_t Ip;
 const Ip kInvalidIp = 0;
 
