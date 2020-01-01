@@ -39,8 +39,10 @@ int NeighborTable::ReadCostTable(const std::string &filename) {
     if (file.eof())
       break;
 
-    Ip from_ip = inet_addr(from_ip_str.c_str());
-    Ip to_ip = inet_addr(to_ip_str.c_str());
+    //Ip from_ip = inet_addr(from_ip_str.c_str());
+    //Ip to_ip = inet_addr(to_ip_str.c_str());
+    Ip from_ip = HostnameToIp(from_ip_str.c_str());
+    Ip to_ip = HostnameToIp(to_ip_str.c_str());
 
     AddCost(from_ip, to_ip, cost);
     AddCost(to_ip, from_ip, cost);

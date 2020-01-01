@@ -1,5 +1,6 @@
 #include "ip.h"
 
+#include <netdb.h>
 #include <sys/types.h>
 #include <ifaddrs.h>
 #include <cstring>
@@ -203,6 +204,25 @@ Ip GetLocalIp() {
 
   freeifaddrs(ifaddr);
   return 0;
+}
+
+int HostnameToIp(const char *hostname)
+{
+  struct hostent *he;
+  struct in_addr **addr_list;
+  int i;
+  if ((he = gethostbyname(hostname)) == nullptr) {
+    perror("get host info");
+    return -1;
+  }
+
+  addr_list = (struct in_addr **)he->h_addr_list;
+
+  for (i = 0; addr_list[i] != nullptr; i++) {
+    return addr_list[i]->s_addr;
+  }
+
+  return -1;
 }
 
 int IpInit() {

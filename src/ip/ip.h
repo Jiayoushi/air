@@ -12,5 +12,6 @@ int IpInputQueuePush(PktBufPtr pkt_buf);
 PktBufPtr IpInputQueuePop();
 
 Ip GetLocalIp();
+int HostnameToIp(const char *hostname);
 
 #endif
