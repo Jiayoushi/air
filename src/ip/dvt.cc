@@ -45,7 +45,7 @@ PktBufPtr Dvt::CreatePacket() const {
 
 void Dvt::Print() const {
   for (auto p = costs_.begin(); p != costs_.end(); ++p) {
-    std::cout << IpStr(p->first) << " ";
+    std::cout << "[IP] " << IpStr(p->first) << " ";
 
     for (auto x = p->second.begin(); x != p->second.end(); ++x) {
       std::cout << IpStr(x->first) << "=" << x->second << " ";
