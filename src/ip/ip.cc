@@ -54,6 +54,20 @@ int IpSend(SegBufPtr seg_buf) {
   return 0;
 }
 
+int IpRelay(PktBufPtr pkt_buf) {
+  std::lock_guard<std::mutex> lock(rt_lock);
+  auto p = rtable.find(pkt_buf->packet->header.dest_ip);
+  if (p == rtable.end())
+    return -1;
+
+  pkt_buf->next_hop = p->second;
+
+  OverlaySend(pkt_buf);
+  std::cout << "[IP] Relay packet " << pkt_buf << std::endl;
+
+  return 0;
+}
+
 static void BroadcastOnce(PktBufPtr pkt_buf) {
   std::unordered_set<Ip> next_hop;
 
@@ -139,8 +153,10 @@ static void Input() {
     if (pkt_buf->packet->header.type == kRouteUpdate) {
       HopMap map = dvt.Update(pkt_buf->packet);
       UpdateRouteTable(map);
-    } else {
+    } else if (pkt_buf->packet->header.dest_ip == GetLocalIp()) {
       Forward(pkt_buf);
+    } else {
+      IpRelay(pkt_buf);
     }
   }
 }
