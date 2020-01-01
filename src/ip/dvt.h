@@ -23,14 +23,14 @@ class Dvt {
   mutable std::mutex mtx_;
  public:
   int Init(Ip local_ip);
-  void Update(DvPtr in_dv);
+  void Update(PktPtr pkt);
 
   /* Deserialize a distance vector received from other hosts */
-  static DvPtr Deserialize(PktBufPtr pkt_buf) {
+  static DvPtr Deserialize(PktPtr pkt) {
     DvPtr dv = std::make_shared<Dv>();
 
-    std::string s(pkt_buf->packet->data,
-                  pkt_buf->packet->header.length - sizeof(PacketHeader));
+    std::string s(pkt->data,
+                  pkt->header.length - sizeof(PacketHeader));
     std::stringstream ss(s);
     cereal::BinaryInputArchive i_archive(ss);
 
@@ -42,7 +42,7 @@ class Dvt {
 
   PktBufPtr CreatePacket() const;
   std::vector<Ip> Neighbors() const;
-  void Print() const;
+  void Print(int option) const;
 
   template <typename Archive>
   void serialize(Archive &archive) {

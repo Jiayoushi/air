@@ -9,7 +9,7 @@
 int Dvt::Init(Ip local_ip) {
   local_ip_ = local_ip;
 
-  std::vector<std::pair<Ip, Cost>> costs = GetCost();
+  std::vector<std::pair<Ip, Cost>> costs = GetAllCost();
 
   for (const std::pair<Ip, Cost> p1: costs)
     for (const std::pair<Ip, Cost> p2: costs)
@@ -20,7 +20,7 @@ int Dvt::Init(Ip local_ip) {
     costs_[local_ip_][cost.first] = cost.second;
 
 
-
+  costs_[local_ip_][local_ip_] = 0;
   return 0;
 }
 
@@ -43,22 +43,58 @@ PktBufPtr Dvt::CreatePacket() const {
   return pkt_buf;
 }
 
-void Dvt::Print() const {
-  for (auto p = costs_.begin(); p != costs_.end(); ++p) {
-    std::cout << "[IP] " << IpStr(p->first) << " ";
-
-    for (auto x = p->second.begin(); x != p->second.end(); ++x) {
+void Dvt::Print(int option) const {
+  if (option == 0) {
+    for (auto p = costs_.begin(); p != costs_.end(); ++p) {
+      std::cout << "[IP] " << IpStr(p->first) << " ";
+      for (auto x = p->second.begin(); x != p->second.end(); ++x) {
+        std::cout << IpStr(x->first) << "=" << x->second << " ";
+      }
+      std::cout << std::endl;
+    }
+  } else {
+    std::cout << "[IP] DV ";
+    for (auto x = costs_.at(local_ip_).cbegin(); x != costs_.at(local_ip_).end(); ++x) {
       std::cout << IpStr(x->first) << "=" << x->second << " ";
     }
-
     std::cout << std::endl;
   }
 }
 
-void Dvt::Update(DvPtr in_dv) {
+void Dvt::Update(PktPtr pkt) {
   std::lock_guard<std::mutex> lck(mtx_);
 
-  Print();
+  DvPtr in_dv = Dvt::Deserialize(pkt);
+  
+  if (costs_.find(pkt->header.src_ip) == costs_.end())
+    return;
+
+  Print(0);
+
+  std::cout << std::endl;
+
+  /* Update */
+  costs_[pkt->header.src_ip] = *in_dv.get();
+  
+  /* Calculate shortest path */
+  for (auto p = costs_.begin(); p != costs_.end(); ++p) {
+    for (auto x = costs_[local_ip_].begin(); x != costs_[local_ip_].end(); ++x) {
+      Ip dest = p->first;
+      Ip nbr = x->first;
+
+      if (dest == local_ip_ ||
+          nbr == local_ip_ ||
+          costs_[nbr][dest] == kInvalidCost ||
+          GetCost(local_ip_, nbr) == kInvalidCost)
+        continue;
+
+      costs_[local_ip_][dest] = std::min(costs_[local_ip_][dest], GetCost(local_ip_, nbr) + costs_[nbr][dest]);
+    }
+  }
+
+  Print(0);
+
+  std::cout << std::endl;
 }
 
 std::vector<Ip> Dvt::Neighbors() const {

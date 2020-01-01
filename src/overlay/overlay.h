@@ -10,6 +10,7 @@ int OverlaySend(PktBufPtr pkt);
 
 Ip GetLocalIp();
 
-std::vector<std::pair<Ip, Cost>> GetCost();
+std::vector<std::pair<Ip, Cost>> GetAllCost();
+Cost GetCost(Ip from, Ip to);
 
 #endif

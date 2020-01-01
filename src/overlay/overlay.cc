@@ -257,7 +257,7 @@ static int RegisterSigpipeHandler() {
   return 0;
 }
 
-std::vector<std::pair<Ip, Cost>> GetCost() {
+std::vector<std::pair<Ip, Cost>> GetAllCost() {
   while (!running)
     sleep(1);
 
@@ -267,6 +267,10 @@ std::vector<std::pair<Ip, Cost>> GetCost() {
     costs.push_back({p->first, nt.GetCost(p->first, GetLocalIp())});
 
   return costs;
+}
+
+Cost GetCost(Ip from, Ip to) {
+  return nt.GetCost(from, to);
 }
 
 int OverlayInit() {

@@ -5,6 +5,8 @@
 #include <iostream>
 #include <cstddef>
 #include <netinet/in.h>
+#include <limits>
+#include <algorithm>
 
 #define DEBUG_ENABLE
 
@@ -17,10 +19,10 @@
   #define CDEBUG 0 && std::cout
 #endif
 
-
 typedef in_addr_t Ip;
-typedef uint32_t Cost;
-
 const Ip kInvalidIp = 0;
+
+typedef uint32_t Cost;
+const Cost kInvalidCost = std::numeric_limits<Cost>::max();
 
 #endif

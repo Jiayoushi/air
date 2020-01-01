@@ -76,11 +76,6 @@ static void Broadcast() {
 static void UpdateRouteTable() {
 }
 
-static void Update(DvPtr in_dv) {
-  dvt.Update(in_dv);
-  UpdateRouteTable();
-}
-
 int IpInputQueuePush(PktBufPtr pkt_buf) {
   ip_input.Push(pkt_buf);
   return 0;
@@ -120,15 +115,14 @@ static void Input() {
     if (!pkt_buf)
       continue;
 
-    if (pkt_buf->packet->header.type == kRouteUpdate) {
-      Update(Dvt::Deserialize(pkt_buf));
+    std::cout << "[IP] received packet " << pkt_buf << std::endl;
 
-      // TODO: relay to other hosts
+    if (pkt_buf->packet->header.type == kRouteUpdate) {
+      dvt.Update(pkt_buf->packet);
+      UpdateRouteTable();
     } else {
       Forward(pkt_buf);
     }
-
-    std::cout << "[IP] received packet " << pkt_buf << std::endl;
   }
 }
 
