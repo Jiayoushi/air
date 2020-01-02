@@ -21,8 +21,6 @@ int main(int argc, char *argv[]) {
 int test() {
   Init();
 
-  SrtClientInit();
-
   while(1)
     sleep(10000);
 

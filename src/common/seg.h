@@ -32,7 +32,7 @@ struct SegmentHeader {
   uint32_t seq;
   uint32_t ack;
   uint16_t length;       /* Header length */
-  uint8_t flags;         /* ACK, FIN, PUSH, RST, SYN, URG */
+  uint16_t flags;         /* ACK, FIN, PUSH, RST, SYN, URG */
   uint16_t rcv_win;
   uint16_t checksum;
 

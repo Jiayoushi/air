@@ -6,7 +6,7 @@
 
 int IpSend(SegBufPtr seg_buf);
 int IpStop();
-int IpInit();
+int IpMain();
 
 int IpInputQueuePush(PktBufPtr pkt_buf);
 PktBufPtr IpInputQueuePop();

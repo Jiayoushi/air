@@ -11,13 +11,10 @@
 #include <stdlib.h>
 #include <iostream>
 
-#include "client/srt_client.h"
-#include "air/air.h"
+#include <air/air.h>
 
-#define kClientPort1  8000
-#define kServerPort1  8001
-#define kClientPort2  8002
-#define kServerPort2  8003
+#define kServerPort1  8000
+#define kServerPort2  8001
 
 const char *hostname = "turtle.zoo.cs.yale.edu";
 
@@ -28,11 +25,10 @@ const char *hostname = "turtle.zoo.cs.yale.edu";
 int main() {
   Init();
 
-  SrtClientInit();
   std::cerr << "Client init success" << std::endl;
 
   // First connection
-  int sockfd = SrtClientSock();
+  int sockfd = Sock();
   if (sockfd < 0) {
     std::cerr << "Failed to create srt client sock" << std::endl;
     exit(-1);
@@ -44,58 +40,40 @@ int main() {
   memcpy(&server_addr.sin_addr, he->h_addr_list[0], he->h_length);
   uint32_t server_ip = server_addr.sin_addr.s_addr;
 
-  if (SrtClientConnect(sockfd, server_ip, kServerPort1) < 0) {
+  if (Connect(sockfd, server_ip, kServerPort1) < 0) {
     std::cerr << "Failed to connect to srt server" << std::endl;
     exit(-1);
   }
-  printf("Client port [%d] connects to server [%d]\n", kClientPort1, kServerPort1);
+  printf("Client port #1 connects to server [%d]\n", kServerPort1);
 
   // Second connection
-  int sockfd2 = SrtClientSock();
+  int sockfd2 = Sock();
   if (sockfd2 < 0) {
     std::cerr << "Failed to create srt client sock" << std::endl;
     exit(-1);
   }
 
-  if (SrtClientConnect(sockfd2, server_ip, kServerPort2) < 0) {
+  if (Connect(sockfd2, server_ip, kServerPort2) < 0) {
     std::cerr << "Failed to connect to srt server" << std::endl;
     exit(-1);
   }
-  printf("Client port [%d] connects to server [%d]\n", kClientPort2, kServerPort2);
+  printf("Client port #2 connects to server [%d]\n", kServerPort2);
 
   // Sleep
   sleep(kWaitTime);
 
-  std::cerr << "Attempt to close sockfd #1 " << std::endl;
-  // Close first connection
-  if (SrtClientDisconnect(sockfd) < 0) {
-    std::cerr << "Failed to disconnect from srt server" << std::endl;
+  // Close second connection
+  if (Close(sockfd) < 0) {
+    std::cerr << "Failed to close srt client" << std::endl;
     exit(EXIT_FAILURE);
   }
   std::cerr << "connection #1 closed " << std::endl;
 
-  // Close second connection
-  if (SrtClientClose(sockfd) < 0) {
+  if (Close(sockfd2) < 0) {
     std::cerr << "Failed to close srt client" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  std::cerr << "connection #1 socket closed " << std::endl;
-
-  // Close second connection
-  if (SrtClientDisconnect(sockfd2)<0) {
-    std::cerr << "Failed to disconnect from srt server" << std::endl;
     exit(EXIT_FAILURE);
   }
   std::cerr << "connection #2 closed" << std::endl;
-
-  if (SrtClientClose(sockfd2) < 0) {
-    std::cerr << "Failed to close srt client" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  std::cerr << "connection #2 socket closed" << std::endl;
-
-  SrtClientShutdown();
-  std::cerr << "shutdown " << std::endl;
 
   Stop();
   std::cout << "Stopped" << std::endl;

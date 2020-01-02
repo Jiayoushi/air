@@ -8,18 +8,18 @@
 #include "overlay/overlay.h"
 #include "common/common.h"
 
-static std::vector<std::thread> modules;
-
 static std::atomic<int> running;
+
+static std::vector<std::thread> modules;
 
 int Init() {
   srand(time(nullptr));
 
   running = 0;
 
-  modules.emplace_back(OverlayInit);
-  modules.emplace_back(IpInit);
-  modules.emplace_back(TcpInit);
+  modules.emplace_back(OverlayMain);
+  modules.emplace_back(IpMain);
+  modules.emplace_back(TcpMain);
 
   while (running != 3)
     std::this_thread::sleep_for(std::chrono::seconds(1));

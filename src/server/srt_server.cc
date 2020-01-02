@@ -12,18 +12,18 @@
 #include "ip/ip.h"
 #include "tcp/tcp.h"
 
-#define kClosed        1
-#define kListening     2
-#define kSynRcvd       3
-#define kConnected     4
-#define kCloseWait     5
+#define kServerClosed        0
+#define kServerListening     1
+#define kServerRcvd          2
+#define kServerConnected     3
+#define kSeverCloseWait      4
 
-#define kMaxConnection     1024
-#define kCloseWaitTimeout  10          /* 10 times 500ms */
-#define kTimersNum         1
+#define kMaxConnection       1024
+#define kSeverCloseWaitTimeout2  10          /* 10 times 500ms */
+#define kTimersNum           1
 
 enum TimerType {
-  kCloseWaitTimer = 0,
+  kSeverCloseWaitTimer = 0,
 };
 
 // Server transport control block.
@@ -51,7 +51,7 @@ struct ServerTcb {
   uint16_t timers[kTimersNum];
 
   ServerTcb(): src_ip(0), src_port(0), dest_ip(0),
-    dest_port(0), state(kClosed),
+    dest_port(0), state(kServerClosed),
     iss(100),
     snd_nxt(iss + 1),
     rcv_nxt(0),
@@ -62,8 +62,8 @@ struct ServerTcb {
   }
 };
 
-std::mutex table_lock;
-static std::vector<std::shared_ptr<ServerTcb>> tcb_table;
+static std::mutex table_lock;
+static std::vector<std::shared_ptr<ServerTcb>> tcb_table2;
 
 typedef std::chrono::duration<double, std::milli> TimeInterval;
 typedef std::shared_ptr<ServerTcb> TcbPtr;
@@ -71,32 +71,32 @@ typedef std::shared_ptr<ServerTcb> TcbPtr;
 // A global variable control the running of all threads.
 static std::atomic<bool> running;
 
-std::shared_ptr<std::thread> input_thread;
-static std::shared_ptr<std::thread> timeout_thread;  /* Timeout loop */
-const static TimeInterval kTimeoutLoopInterval(500); /* 500ms */
+static std::shared_ptr<std::thread> input_thread;
+static std::shared_ptr<std::thread> timeout_thread;  /* Timeout2 loop */
+const static TimeInterval kTimeout2LoopInterval(500); /* 500ms */
 
-std::shared_ptr<ServerTcb> Demultiplex(SegBufPtr seg_buf) {
+std::shared_ptr<ServerTcb> Dem2(SegBufPtr seg_buf) {
   for (int tcb_id = 0; tcb_id < kMaxConnection; ++tcb_id) {
-    if (tcb_table[tcb_id] == nullptr)
+    if (tcb_table2[tcb_id] == nullptr)
       continue;
 
     /* Accept new connection */
-    if (tcb_table[tcb_id]->state == kListening &&
+    if (tcb_table2[tcb_id]->state == kServerListening &&
         (seg_buf->segment->header.flags & kSyn) &&
-        seg_buf->segment->header.dest_port == tcb_table[tcb_id]->src_port)
-      return tcb_table[tcb_id];
+        seg_buf->segment->header.dest_port == tcb_table2[tcb_id]->src_port)
+      return tcb_table2[tcb_id];
 
     /* Normal case */
-    if (seg_buf->segment->header.src_port == tcb_table[tcb_id]->dest_port &&
-        seg_buf->segment->header.dest_port == tcb_table[tcb_id]->src_port &&
-        seg_buf->src_ip == tcb_table[tcb_id]->dest_ip)
-    return tcb_table[tcb_id];
+    if (seg_buf->segment->header.src_port == tcb_table2[tcb_id]->dest_port &&
+        seg_buf->segment->header.dest_port == tcb_table2[tcb_id]->src_port &&
+        seg_buf->src_ip == tcb_table2[tcb_id]->dest_ip)
+    return tcb_table2[tcb_id];
   }
 
   return nullptr;
 }
 
-static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, uint8_t flags, const void *data=nullptr, uint32_t len=0) {
+static SegBufPtr Create(TcbPtr tcb, uint8_t flags, const void *data=nullptr, uint32_t len=0) {
   SegPtr seg = std::make_shared<Segment>();
 
   seg->header.src_port = tcb->src_port;
@@ -115,7 +115,7 @@ static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, uint8_t flags, const void *data
   return std::make_shared<SegmentBuffer>(seg, len, tcb->src_ip, tcb->dest_ip);
 }
 
-static int Input(SegBufPtr seg_buf) {
+static int Input2(SegBufPtr seg_buf) {
   SegPtr seg = seg_buf->segment;
 
   if (!ValidChecksum(seg, sizeof(SegmentHeader) + seg_buf->data_size)) {
@@ -123,7 +123,7 @@ static int Input(SegBufPtr seg_buf) {
     return -1;
   }
 
-  std::shared_ptr<ServerTcb> tcb = Demultiplex(seg_buf);
+  std::shared_ptr<ServerTcb> tcb = Dem2(seg_buf);
   if (tcb == nullptr) {
     SDEBUG << "No matching tcb" << std::endl;
     return -1;
@@ -131,52 +131,52 @@ static int Input(SegBufPtr seg_buf) {
 
   std::lock_guard<std::mutex> lck(tcb->lock);
   switch (tcb->state) {
-    case kClosed: {
-      std::cerr << "[TCP] Input: segment received when state is closed" << std::endl;
+    case kServerClosed: {
+      std::cerr << "[TCP] Input2: segment received when state is closed" << std::endl;
       return -1;
     }
-    case kListening: {
+    case kServerListening: {
       if ((seg->header.flags & kSyn) != kSyn)
         return -1;
 
       tcb->dest_ip = seg_buf->src_ip;
       tcb->dest_port = seg->header.src_port;
       tcb->rcv_nxt = seg->header.seq + 1;
-
-      tcb->state = kSynRcvd;
+      tcb->state = kServerRcvd;
 
       uint8_t flags = kAck | kSyn;
-      SegBufPtr syn_ack = CreateSegmentBuffer(tcb, flags);
+      SegBufPtr syn_ack = Create(tcb, flags);
       IpSend(syn_ack);
       SDEBUG << "SENT: " << syn_ack << std::endl;
-
       tcb->snd_nxt += 1;
+
       return 0;
     }
-    case kSynRcvd: {
+    case kServerRcvd: {
       if ((seg->header.flags & kAck) != kAck)
         break;
       if (seg->header.ack != tcb->snd_nxt)
 	break;
 
-      tcb->state = kConnected;
+      tcb->state = kServerConnected;
       tcb->waiting.notify_one();
       return 0;
     }
-    case kConnected: {
+    case kServerConnected: {
       if (seg->header.flags & kFin) {
+        tcb->state = kSeverCloseWait;
+        tcb->rcv_nxt += 1;
+
         uint8_t flags = kAck | kFin;
-        SegBufPtr fin_ack = CreateSegmentBuffer(tcb, flags);
+        SegBufPtr fin_ack = Create(tcb, flags);
         IpSend(fin_ack);
         SDEBUG << "SENT: " << fin_ack << std::endl;
-
-        tcb->state = kCloseWait;
-        tcb->rcv_nxt += 1;
+	tcb->snd_nxt += 1;
 
         return 0;
       } else if (seg->header.flags & kSyn) {
         uint8_t flags = kAck;
-        SegBufPtr syn_ack = CreateSegmentBuffer(tcb, flags);
+        SegBufPtr syn_ack = Create(tcb, flags);
         IpSend(syn_ack);
         SDEBUG << "SENT: " << syn_ack << std::endl;
 
@@ -188,7 +188,7 @@ static int Input(SegBufPtr seg_buf) {
         tcb->rcv_nxt += seg_buf->data_size;
 
 	uint8_t flags = kAck;
-        SegBufPtr data_ack = CreateSegmentBuffer(tcb, flags);
+        SegBufPtr data_ack = Create(tcb, flags);
         IpSend(data_ack);
         SDEBUG << "SENT: " << data_ack << std::endl;
 
@@ -198,17 +198,17 @@ static int Input(SegBufPtr seg_buf) {
       }
       break;
    }
-   case kCloseWait: {
+   case kSeverCloseWait: {
       if ((seg->header.flags & kFin) != kFin)
         break;
 
       uint8_t flags = kAck | kFin;
-      SegBufPtr fin_ack = CreateSegmentBuffer(tcb, flags);
+      SegBufPtr fin_ack = Create(tcb, flags);
       IpSend(fin_ack);
       SDEBUG << "SENT: " << fin_ack << std::endl;
 
       // Wait for 30s before really close
-      // tcb->state = kClosed;
+      // tcb->state = kServerClosed;
       return 0;
    }
    default:
@@ -221,17 +221,18 @@ static int Input(SegBufPtr seg_buf) {
 
 
 int SrtServerAccept(int sockfd) {
-  std::shared_ptr<ServerTcb> tcb = tcb_table[sockfd];
+  std::shared_ptr<ServerTcb> tcb = tcb_table2[sockfd];
   if (tcb == nullptr)
     return -1;
 
-  tcb->state = kListening;
+  tcb->state = kServerListening;
+  std::cout << "[DEBUG] " << sockfd << " " << tcb->state << std::endl;
 
   // Blocked until input notify that the state is connected
   std::unique_lock<std::mutex> lk(tcb->lock);
   tcb->waiting.wait(lk, 
     [&tcb] {
-      return tcb->state == kConnected; 
+      return tcb->state == kServerConnected; 
     });
 
   return 0;
@@ -239,7 +240,7 @@ int SrtServerAccept(int sockfd) {
 
 
 size_t SrtServerRecv(int sockfd, void *buffer, unsigned int length) {
-  std::shared_ptr<ServerTcb> tcb = tcb_table[sockfd]; 
+  std::shared_ptr<ServerTcb> tcb = tcb_table2[sockfd]; 
   if (tcb == nullptr)
     return -1;
 
@@ -266,38 +267,40 @@ size_t SrtServerRecv(int sockfd, void *buffer, unsigned int length) {
   return recved;
 }
 
-static void InputFromIp() {
+static void Input2FromIp() {
   while (running) {
     SegBufPtr seg_buf = TcpInputQueuePop();
 
     if (seg_buf != nullptr) {
       SDEBUG << "RECV: " << seg_buf << std::endl;
-      Input(seg_buf);
+      Input2(seg_buf);
     }
   }
 }
 
-static void Timeout() {
+static void Timeout2() {
   while (running) {
     for (int tcb_id = 0; tcb_id < kMaxConnection; ++tcb_id) {
-      TcbPtr tcb = tcb_table[tcb_id];
-      if (tcb_table[tcb_id] == nullptr)
+      TcbPtr tcb = tcb_table2[tcb_id];
+      if (tcb_table2[tcb_id] == nullptr)
         continue;
 
-      if (tcb_table[tcb_id]->state == kCloseWait &&
-	  ++tcb_table[tcb_id]->timers[kCloseWaitTimer] == kCloseWaitTimeout)
-	tcb_table[tcb_id]->state = kClosed;
+      if (tcb_table2[tcb_id]->state == kSeverCloseWait &&
+	  ++tcb_table2[tcb_id]->timers[kSeverCloseWaitTimer] == kSeverCloseWaitTimeout2) {
+	std::cout << "[TCP] close wait timed out, " << tcb_id << " is now closed" << std::endl;
+	tcb_table2[tcb_id]->state = kServerClosed;
+      }
     }
 
-    std::this_thread::sleep_for(kTimeoutLoopInterval);
+    std::this_thread::sleep_for(kTimeout2LoopInterval);
   }
 }
 
 int SrtServerSock() {
   for (int i = 0; i < kMaxConnection; ++i) {
-    if (tcb_table[i] == nullptr) {
-      tcb_table[i] = std::make_shared<ServerTcb>();
-      tcb_table[i]->state = kListening;
+    if (tcb_table2[i] == nullptr) {
+      tcb_table2[i] = std::make_shared<ServerTcb>();
+      tcb_table2[i]->state = kServerListening;
       return i;
     }
   }
@@ -306,26 +309,26 @@ int SrtServerSock() {
 }
 
 int SrtServerBind(int sockfd, Ip src_ip, uint16_t src_port) {
-  if (tcb_table[sockfd] == nullptr)
+  if (tcb_table2[sockfd] == nullptr)
     return -1;
 
-  tcb_table[sockfd]->src_ip = src_ip;
-  tcb_table[sockfd]->src_port = src_port;
+  tcb_table2[sockfd]->src_ip = src_ip;
+  tcb_table2[sockfd]->src_port = src_port;
 
   return 0;
 }
 
 int SrtServerClose(int sockfd) {
-  tcb_table[sockfd] = nullptr;
+  tcb_table2[sockfd] = nullptr;
   return 0;
 }
 
 void SrtServerInit() {
-  tcb_table = std::vector<TcbPtr>(kMaxConnection, nullptr);
+  tcb_table2 = std::vector<TcbPtr>(kMaxConnection, nullptr);
 
   running = true;
-  input_thread = std::make_shared<std::thread>(InputFromIp);
-  timeout_thread = std::make_shared<std::thread>(Timeout);
+  input_thread = std::make_shared<std::thread>(Input2FromIp);
+  timeout_thread = std::make_shared<std::thread>(Timeout2);
 }
 
 static void NotifyShutdown() {

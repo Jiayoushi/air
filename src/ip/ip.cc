@@ -225,7 +225,7 @@ int HostnameToIp(const char *hostname) {
   return -1;
 }
 
-int IpInit() {
+int IpMain() {
   std::cout << "[IP] network layer starting ..." << std::endl;
 
   dvt.Init(GetLocalIp());

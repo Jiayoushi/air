@@ -15,10 +15,8 @@
 #include "server/srt_server.h"
 #include "air/air.h"
 
-#define kClientPort1 8000
-#define kServerPort1 8001
-#define kClientPort2 8002
-#define kServerPort2 8003
+#define kServerPort1 8000
+#define kServerPort2 8001
 
 #define kWaitTime    6
 
@@ -47,6 +45,7 @@ int main() {
     std::cerr << "srt_server_bind #1 failed" << std::endl;
     exit(-1);
   }
+  std::cout << "Binded" << std::endl;
 
   if (SrtServerAccept(sockfd) < 0) {
     std::cerr << "srt_server accept #1 failed" << std::endl;

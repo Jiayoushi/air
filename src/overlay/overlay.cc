@@ -273,7 +273,7 @@ Cost GetCost(Ip from, Ip to) {
   return nt.GetCost(from, to);
 }
 
-int OverlayInit() {
+int OverlayMain() {
   std::cout << "[OVERLAY] Overlay layer starting ..." << std::endl;
 
   std::cout << "[OVERLAY] local ip " << IpStr(GetLocalIp()) << std::endl;
@@ -282,7 +282,6 @@ int OverlayInit() {
     exit(-1);
 
   nt.Init();
-
 
   std::cout << "[OVERLAY] accepting connections from other hosts" << std::endl;
   std::thread accept_neighbors(AcceptNeighbors);

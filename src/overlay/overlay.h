@@ -4,7 +4,7 @@
 #include "common/pkt.h"
 #include "common/common.h"
 
-int OverlayInit();
+int OverlayMain();
 int OverlayStop();
 int OverlaySend(PktBufPtr pkt);
 
