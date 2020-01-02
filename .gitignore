@@ -16,6 +16,8 @@ build
 *log.txt
 *dialogue.txt
 
+
+con_*
 loop
 unit_test
 file_server
