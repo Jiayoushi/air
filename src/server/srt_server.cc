@@ -17,10 +17,13 @@
 #define kConnected     3
 #define kCloseWait     4
 
-#define kMaxConnection 1024
+#define kMaxConnection     1024
+#define kCloseWaitTimeout  10          /* 10 times 500ms */
+#define kTimersNum         1
 
-static uint32_t overlay_conn;
-
+enum TimerType {
+  kCloseWaitTimer = 0,
+};
 
 // Server transport control block.
 struct ServerTcb {
@@ -44,26 +47,32 @@ struct ServerTcb {
 
   RecvBuffer recv_buffer;
 
+  uint16_t timers[kTimersNum];
+
   ServerTcb(): src_ip(0), src_port(0), dest_ip(0),
     dest_port(0), state(kClosed),
-    iss(100), //rand() % std::numeric_limits<unsigned int>::max()),
+    iss(100),
     snd_nxt(iss + 1),
     rcv_nxt(0),
     rcv_win(1),
     lock(),
-    recv_buffer() {}
+    recv_buffer() {
+    memset(timers, 0, sizeof(uint16_t) * kTimersNum);
+  }
 };
 
 std::mutex table_lock;
-static std::vector<std::shared_ptr<ServerTcb>> tcb_table(kMaxConnection, nullptr);
+static std::vector<std::shared_ptr<ServerTcb>> tcb_table;
 
-
+typedef std::chrono::duration<double, std::milli> TimeInterval;
 typedef std::shared_ptr<ServerTcb> TcbPtr;
 
 // A global variable control the running of all threads.
 static std::atomic<bool> running;
 
 std::shared_ptr<std::thread> input_thread;
+static std::shared_ptr<std::thread> timeout_thread;  /* Timeout loop */
+const static TimeInterval kTimeoutLoopInterval(500); /* 500ms */
 
 std::shared_ptr<ServerTcb> Demultiplex(SegBufPtr seg_buf) {
   for (int tcb_id = 0; tcb_id < kMaxConnection; ++tcb_id) {
@@ -72,7 +81,7 @@ std::shared_ptr<ServerTcb> Demultiplex(SegBufPtr seg_buf) {
 
     /* Accept new connection */
     if (tcb_table[tcb_id]->state == kListening &&
-        seg_buf->segment->header.type == kSyn &&
+        (seg_buf->segment->header.flags & kSyn) &&
         seg_buf->segment->header.dest_port == tcb_table[tcb_id]->src_port)
       return tcb_table[tcb_id];
 
@@ -86,25 +95,19 @@ std::shared_ptr<ServerTcb> Demultiplex(SegBufPtr seg_buf) {
   return nullptr;
 }
 
-static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, enum SegmentType type, const void *data=nullptr, uint32_t len=0) {
+static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, uint8_t flags, const void *data=nullptr, uint32_t len=0) {
   SegPtr seg = std::make_shared<Segment>();
 
   seg->header.src_port = tcb->src_port;
   seg->header.dest_port = tcb->dest_port;
-
-  if (type == kSynAck)
-    seg->header.seq = tcb->iss + 1;
-  else
-    seg->header.seq = 0;
-
+  seg->header.seq = tcb->snd_nxt;
   seg->header.length = sizeof(SegmentHeader);
-  seg->header.type = type;
+  seg->header.flags = flags;
   seg->header.rcv_win = tcb->rcv_win;
-  seg->header.ack = (type == kSyn) ? 0 : tcb->rcv_nxt;
+  seg->header.ack = (flags & kAck) ? tcb->rcv_nxt : 0;
 
-  if (data) {
+  if (data)
     memcpy(seg->data, data, len);
-  }
 
   seg->header.checksum = Checksum(seg, len + sizeof(SegmentHeader));
 
@@ -127,19 +130,20 @@ static int Input(SegBufPtr seg_buf) {
 
   std::lock_guard<std::mutex> lck(tcb->lock);
   switch (tcb->state) {
-    case kClosed:
-      std::cerr << "Input: segment received when state is closed" << std::endl;
+    case kClosed: {
+      std::cerr << "[TCP] Input: segment received when state is closed" << std::endl;
       return -1;
-
+    }
     case kListening: {
-      if (seg->header.type != kSyn)
+      if ((seg->header.flags & kSyn) != kSyn)
         return -1;
 
       tcb->dest_ip = seg_buf->src_ip;
       tcb->dest_port = seg->header.src_port;
       tcb->rcv_nxt = seg->header.seq + 1;
 
-      SegBufPtr syn_ack = CreateSegmentBuffer(tcb, kSynAck);
+      uint8_t flags = kAck;
+      SegBufPtr syn_ack = CreateSegmentBuffer(tcb, flags);
       IpSend(syn_ack);
 
       tcb->state = kConnected;
@@ -151,8 +155,9 @@ static int Input(SegBufPtr seg_buf) {
       return 0;
     }
     case kConnected: {
-      if (seg->header.type == kFin) {
-        SegBufPtr fin_ack = CreateSegmentBuffer(tcb, kFinAck);
+      if (seg->header.flags & kFin) {
+        uint8_t flags = kAck | kFin;
+        SegBufPtr fin_ack = CreateSegmentBuffer(tcb, flags);
         IpSend(fin_ack);
         SDEBUG << "SENT: " << fin_ack << std::endl;
 
@@ -160,38 +165,42 @@ static int Input(SegBufPtr seg_buf) {
         tcb->rcv_nxt += 1;
 
         return 0;
-      } else if (seg->header.type == kSyn) {
-        SegBufPtr syn_ack = CreateSegmentBuffer(tcb, kSynAck);
+      } else if (seg->header.flags & kSyn) {
+        uint8_t flags = kAck;
+        SegBufPtr syn_ack = CreateSegmentBuffer(tcb, flags);
         IpSend(syn_ack);
         SDEBUG << "SENT: " << syn_ack << std::endl;
 
         return 0;
-      } else if (seg->header.type == kData) {
+      } else if (seg->header.length != 0) {
         if (seg->header.seq != tcb->rcv_nxt)
           break;
 
         tcb->rcv_nxt += seg_buf->data_size;
 
-        SegBufPtr data_ack = CreateSegmentBuffer(tcb, kDataAck);
+	uint8_t flags = kAck;
+        SegBufPtr data_ack = CreateSegmentBuffer(tcb, flags);
         IpSend(data_ack);
         SDEBUG << "SENT: " << data_ack << std::endl;
 
         tcb->recv_buffer.PushBack(seg_buf);
         tcb->waiting.notify_one();
-
         return 0;
       }
-
       break;
    }
    case kCloseWait: {
-     if (seg->header.type != kFin)
-       break;
-   
-     SegBufPtr fin_ack = CreateSegmentBuffer(tcb, kFinAck);
-     IpSend(fin_ack);
-     SDEBUG << "SENT: " << fin_ack << std::endl;
-     return 0;           
+      if ((seg->header.flags & kFin) != kFin)
+        break;
+
+      uint8_t flags = kAck | kFin;
+      SegBufPtr fin_ack = CreateSegmentBuffer(tcb, flags);
+      IpSend(fin_ack);
+      SDEBUG << "SENT: " << fin_ack << std::endl;
+
+      // Wait for 30s before really close
+      // tcb->state = kClosed;
+      return 0;
    }
    default:
      std::cerr << "Error: sockfd already connected" << std::endl;
@@ -259,6 +268,22 @@ static void InputFromIp() {
   }
 }
 
+static void Timeout() {
+  while (running) {
+    for (int tcb_id = 0; tcb_id < kMaxConnection; ++tcb_id) {
+      TcbPtr tcb = tcb_table[tcb_id];
+      if (tcb_table[tcb_id] == nullptr)
+        continue;
+
+      if (tcb_table[tcb_id]->state == kCloseWait &&
+	  ++tcb_table[tcb_id]->timers[kCloseWaitTimer] == kCloseWaitTimeout)
+	tcb_table[tcb_id]->state = kClosed;
+    }
+
+    std::this_thread::sleep_for(kTimeoutLoopInterval);
+  }
+}
+
 int SrtServerSock() {
   for (int i = 0; i < kMaxConnection; ++i) {
     if (tcb_table[i] == nullptr) {
@@ -287,9 +312,11 @@ int SrtServerClose(int sockfd) {
 }
 
 void SrtServerInit() {
-  running = true;
+  tcb_table = std::vector<TcbPtr>(kMaxConnection, nullptr);
 
+  running = true;
   input_thread = std::make_shared<std::thread>(InputFromIp);
+  timeout_thread = std::make_shared<std::thread>(Timeout);
 }
 
 static void NotifyShutdown() {
@@ -300,6 +327,7 @@ void SrtServerShutdown() {
   NotifyShutdown();
 
   input_thread->join();
+  timeout_thread->join();
 
   std::cout << "Exited" << std::endl;
 }

@@ -66,7 +66,7 @@ struct ClientTcb {
     dest_ip(0),
     dest_port(0),
     state(kClosed),
-    iss(0),//rand() % std::numeric_limits<uint32_t>::max()),
+    iss(0),
     snd_una(0), 
     snd_nxt(iss + 1),
     rcv_nxt(0),
@@ -105,25 +105,24 @@ int SrtClientSock() {
   return -1;
 }
 
-static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, enum SegmentType type, const void *data=nullptr, uint32_t data_size=0) {
+static SegBufPtr CreateSegmentBuffer(TcbPtr tcb, uint8_t flags, const void *data=nullptr, uint32_t len=0) {
   SegPtr seg = std::make_shared<Segment>();
 
   seg->header.src_port = tcb->src_port;
   seg->header.dest_port = tcb->dest_port;
   seg->header.seq = tcb->snd_nxt;
+  seg->header.ack = (flags & kAck) ? tcb->rcv_nxt : 0;
   seg->header.length = sizeof(SegmentHeader);
-  seg->header.type = type;
+  seg->header.flags = flags;
   seg->header.rcv_win = tcb->rcv_win;
-  seg->header.ack = (type == kSyn) ? 0 : tcb->rcv_nxt;
   seg->header.checksum = 0;
 
-  if (data != nullptr) {
-    memcpy(seg->data, data, data_size);
-  }
+  if (data != nullptr)
+    memcpy(seg->data, data, len);
 
-  seg->header.checksum = Checksum(seg, data_size + sizeof(SegmentHeader));
+  seg->header.checksum = Checksum(seg, len + sizeof(SegmentHeader));
 
-  return std::make_shared<SegmentBuffer>(seg, data_size, tcb->src_ip, tcb->dest_ip);
+  return std::make_shared<SegmentBuffer>(seg, len, tcb->src_ip, tcb->dest_ip);
 }
 
 /*
@@ -146,7 +145,8 @@ int SrtClientConnect(int sockfd, Ip dest_ip, uint16_t dest_port) {
   tcb->dest_port = dest_port;
 
   /* Create Syn Segment and push it back to the sender buffer */
-  SegBufPtr syn_buf = CreateSegmentBuffer(tcb, kSyn);
+  uint8_t flags = kSyn;
+  SegBufPtr syn_buf = CreateSegmentBuffer(tcb, flags);
   tcb->send_buffer.PushBack(syn_buf);
 
   /* Update */
@@ -183,7 +183,8 @@ int SrtClientDisconnect(int sockfd) {
 
   std::unique_lock<std::mutex> lk(tcb->lock);
 
-  SegBufPtr seg_buf = CreateSegmentBuffer(tcb, kFin);
+  uint8_t flags = kFin | kAck;
+  SegBufPtr seg_buf = CreateSegmentBuffer(tcb, flags);
   tcb->send_buffer.PushBack(seg_buf);
 
   /* Update */
@@ -223,7 +224,8 @@ size_t SrtClientSend(int sockfd, const void *data, uint32_t length) {
   while (seg_len > 0) {
     size_t size = std::min(seg_len, kMss);
 
-    SegBufPtr seg_buf = CreateSegmentBuffer(tcb, kData, p, size);
+    uint8_t flags = kAck;
+    SegBufPtr seg_buf = CreateSegmentBuffer(tcb, flags, p, size);
 
     bufs.push_back(seg_buf);
     tcb->send_buffer.PushBack(seg_buf);
@@ -264,56 +266,41 @@ static int Input(SegBufPtr seg_buf) {
     return -1;
   }
 
+  /* Handle Ack */
+  size_t acked = tcb->send_buffer.Ack(seg->header.ack);
+  CDEBUG << "ACKED: " << acked << " UNACKED: " << tcb->send_buffer.Unacked() << " UNSENT: " << tcb->send_buffer.Unsent() << std::endl;
+  if (acked != 0)
+    tcb->send_buffer.SendUnsent();
+
+  /* Change states */
   std::lock_guard<std::mutex> lck(tcb->lock);
   switch (tcb->state) {
     case kClosed: {
       break;
     }
     case kSynSent: {
-	  if (seg->header.type != kSynAck) {
-	    break;
-      }
-
-      size_t acked = tcb->send_buffer.Ack(seg->header.ack);
-      CDEBUG << "ACKED: " << acked << std::endl;
-      if (acked == 0)
+      if ((seg->header.flags & kAck) != kAck || acked <= 0)
         break;
 
-      tcb->send_buffer.SendUnsent();
-
-	  tcb->state = kConnected;
-      tcb->irs = seg->header.seq;
-	  tcb->rcv_nxt = tcb->irs + 1;
+      tcb->state = kConnected;
+      if (seg->header.flags & kSyn) {
+        tcb->irs = seg->header.seq;
+        tcb->rcv_nxt = tcb->irs + 1;
+      }
 
       tcb->waiting.notify_one();
       return 0;
     }
     case kConnected: {
-      if (seg->header.type != kDataAck)
-        break;
-
-      size_t acked = tcb->send_buffer.Ack(seg->header.ack);
-      CDEBUG << "ACKED: " << acked << " UNACKED: " << tcb->send_buffer.Unacked() << " UNSENT: " << tcb->send_buffer.Unsent() << std::endl;
-      if (acked == 0)
-        break;
-
-      tcb->send_buffer.SendUnsent();
-
       return 0;
     }
     case kFinWait: {
-      if (seg->header.type != kFinAck)
-        break;
-
-      uint32_t snd_nxt = 0;
-      if ((snd_nxt = tcb->send_buffer.Ack(seg->header.ack)) < 0)
+      if ((seg->header.flags & kFin) != kFin || acked <= 0)
         break;
 
       tcb->state = kClosed;
       tcb->waiting.notify_one();
-
       return 0;
-
     }
     default:
       break;

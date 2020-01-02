@@ -14,35 +14,40 @@ typedef std::chrono::milliseconds Timepoint;
 typedef std::shared_ptr<Segment> SegPtr;
 typedef std::shared_ptr<SegmentBuffer> SegBufPtr;
 
-const size_t kMss                     = 512;
+const size_t kMss = 512;
 
 
-enum SegmentType {
-  kSyn,
-  kSynAck,
-  kFin,
-  kFinAck,
-  kData,
-  kDataAck
+enum FlagMask {
+  kAck  = 0b100000,
+  kFin  = 0b010000,
+  kPush = 0b001000,
+  kRst  = 0b000100,
+  kSyn  = 0b000010,
+  kUrg  = 0b000001
 };
 
 struct SegmentHeader {
-  uint32_t src_port;
-  uint32_t dest_port;
+  uint16_t src_port;
+  uint16_t dest_port;
   uint32_t seq;
   uint32_t ack;
   uint16_t length;       /* Header length */
-  uint16_t type;
+  uint8_t flags;         /* ACK, FIN, PUSH, RST, SYN, URG */
   uint16_t rcv_win;
   uint16_t checksum;
+
+  SegmentHeader():
+    src_port(0), dest_port(0), seq(0), ack(0), length(0),
+    flags(0), rcv_win(0), checksum(0) {}
 };
 
 struct Segment {
   SegmentHeader header;
   char data[kMss];
+
+  Segment():
+    header() {}
 };
-
-
 
 /*
  * Segment Buffer
@@ -70,7 +75,7 @@ std::string SegToString(std::shared_ptr<Segment> seg);
 inline std::ostream &operator<<(std::ostream &out, SegBufPtr seg_buf) {
   out << SegToString(seg_buf->segment);
 
-  out << ", data_size=" << seg_buf->data_size;
+  out << ", len=" << seg_buf->data_size;
 
   return out;
 }

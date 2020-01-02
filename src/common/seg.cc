@@ -14,7 +14,6 @@ unsigned short Checksum(std::shared_ptr<Segment> seg, uint32_t count) {
   seg->header.checksum = 0;
 
   unsigned short *addr = (unsigned short *)seg.get();
-  
   register long sum = 0;
   
   while (count > 1) {
@@ -25,7 +24,6 @@ unsigned short Checksum(std::shared_ptr<Segment> seg, uint32_t count) {
   if (count > 0)
     sum += *addr++;
 
-
   while (sum >> 16)
     sum = (sum & 0xffff) + (sum >> 16);
 
@@ -34,34 +32,23 @@ unsigned short Checksum(std::shared_ptr<Segment> seg, uint32_t count) {
 }
 
 bool ValidChecksum(std::shared_ptr<Segment> seg, unsigned int size) {
-  uint16_t got = Checksum(seg, size);
-
-  if (got != seg->header.checksum)
-    std::cerr << "cheksum: got " << got << " expected " << seg->header.checksum << std::endl;
-  return got  == seg->header.checksum;
-}
-
-
-static std::vector<std::string> type_strings = 
-{"SYN", "SYN_ACK", "FIN", "FIN_ACK", "DATA", "DATA_ACK"};
-
-static std::string GetTypeString(uint16_t type) {
-  if (type < 0 || type >= type_strings.size()) {
-    return "UNMATCHED_TYPE";
-  } else {
-    return type_strings[type];
-  }
+  return Checksum(seg, size) == seg->header.checksum;
 }
 
 std::string SegToString(std::shared_ptr<Segment> seg) {
-  std::stringstream ss;
-
   SegmentHeader &h = seg->header;
 
+  std::stringstream ss;
   ss << "src_port="   << h.src_port << ", dest_port=" << h.dest_port
      << ", seq="      << h.seq      << ", ack="       << h.ack
-     << ", length="   << h.length   << ", type="      << GetTypeString(h.type)
-     << ", recv_win=" << h.rcv_win  << ", checksum="  << h.checksum;
+     << ", length="   << h.length   
+     << ", ACK="      << bool(h.flags & kAck)
+     << ", FIN="      << bool(h.flags & kFin)
+     << ", PUSH="     << bool(h.flags & kPush)
+     << ", RST="      << bool(h.flags & kRst)
+     << ", SYN="      << bool(h.flags & kSyn)
+     << ", URG="      << bool(h.flags & kUrg)
+     << ", win=" << h.rcv_win  << ", checksum="  << h.checksum;
 
   return ss.str();
 }
