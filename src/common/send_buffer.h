@@ -20,8 +20,6 @@ class SendBuffer {
 
   std::list<SegBufPtr> unacked_;
   std::list<SegBufPtr> unsent_;
-
-
  public:
   SendBuffer():
     retry_(0),

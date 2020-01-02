@@ -20,7 +20,7 @@
 #define kClientPort2 8002
 #define kServerPort2 8003
 
-#define kWaitTime    100
+#define kWaitTime    6
 
 const char *hostname = "turtle.zoo.cs.yale.edu";
 

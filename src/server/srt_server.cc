@@ -14,8 +14,9 @@
 
 #define kClosed        1
 #define kListening     2
-#define kConnected     3
-#define kCloseWait     4
+#define kSynRcvd       3
+#define kConnected     4
+#define kCloseWait     5
 
 #define kMaxConnection     1024
 #define kCloseWaitTimeout  10          /* 10 times 500ms */
@@ -142,16 +143,24 @@ static int Input(SegBufPtr seg_buf) {
       tcb->dest_port = seg->header.src_port;
       tcb->rcv_nxt = seg->header.seq + 1;
 
-      uint8_t flags = kAck;
+      tcb->state = kSynRcvd;
+
+      uint8_t flags = kAck | kSyn;
       SegBufPtr syn_ack = CreateSegmentBuffer(tcb, flags);
       IpSend(syn_ack);
+      SDEBUG << "SENT: " << syn_ack << std::endl;
+
+      tcb->snd_nxt += 1;
+      return 0;
+    }
+    case kSynRcvd: {
+      if ((seg->header.flags & kAck) != kAck)
+        break;
+      if (seg->header.ack != tcb->snd_nxt)
+	break;
 
       tcb->state = kConnected;
-      tcb->snd_nxt += 1;
-     
-      SDEBUG << "SENT: " << syn_ack << std::endl;
       tcb->waiting.notify_one();
-
       return 0;
     }
     case kConnected: {

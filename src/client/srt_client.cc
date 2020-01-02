@@ -267,10 +267,13 @@ static int Input(SegBufPtr seg_buf) {
   }
 
   /* Handle Ack */
-  size_t acked = tcb->send_buffer.Ack(seg->header.ack);
-  CDEBUG << "ACKED: " << acked << " UNACKED: " << tcb->send_buffer.Unacked() << " UNSENT: " << tcb->send_buffer.Unsent() << std::endl;
-  if (acked != 0)
-    tcb->send_buffer.SendUnsent();
+  size_t acked = 0;
+  if (seg->header.flags & kAck) {
+    acked = tcb->send_buffer.Ack(seg->header.ack);
+    CDEBUG << "ACKED: " << acked << " UNACKED: " << tcb->send_buffer.Unacked() << " UNSENT: " << tcb->send_buffer.Unsent() << std::endl;
+    if (acked != 0)
+      tcb->send_buffer.SendUnsent();
+  }
 
   /* Change states */
   std::lock_guard<std::mutex> lck(tcb->lock);
@@ -279,19 +282,30 @@ static int Input(SegBufPtr seg_buf) {
       break;
     }
     case kSynSent: {
-      if ((seg->header.flags & kAck) != kAck || acked <= 0)
+      if (acked <= 0)
         break;
 
       tcb->state = kConnected;
       if (seg->header.flags & kSyn) {
         tcb->irs = seg->header.seq;
         tcb->rcv_nxt = tcb->irs + 1;
+
+        uint8_t flags = kAck;
+        SegBufPtr ack = CreateSegmentBuffer(tcb, flags);
+	IpSend(ack);
+	std::cout << "[TCP] sent " << ack << std::endl;
       }
 
       tcb->waiting.notify_one();
       return 0;
     }
     case kConnected: {
+      if (seg->header.flags & kSyn) {
+        uint8_t flags = kAck;
+        SegBufPtr ack = CreateSegmentBuffer(tcb, flags);
+	IpSend(ack);
+	std::cout << "[TCP] sent " << ack << std::endl;
+      }
       return 0;
     }
     case kFinWait: {
