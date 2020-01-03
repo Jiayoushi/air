@@ -18,7 +18,6 @@ add_library(common_lib
             src/ip/dvt.cc
             src/overlay/overlay.cc
             src/overlay/ntable.cc
-            src/server/srt_server.cc
             src/air/air.cc)
 
 add_executable(unit_test
