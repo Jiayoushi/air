@@ -11,16 +11,16 @@
 #include <atomic>
 #include <thread>
 
-#include "air/air.h"
-#include "common/common.h"
-#include "common/seg.h"
-#include "common/pkt.h"
-#include "common/blocking_queue.h"
-#include "tcp/tcp.h"
-#include "ip/dvt.h"
-#include "overlay/overlay.h"
+#include <common.h>
+#include <seg.h>
+#include <pkt.h>
+#include <blocking_queue.h>
+#include <tcp.h>
+#include <ip_dvt.h>
+#include <overlay.h>
 
-std::atomic<bool> running;
+std::atomic<bool> ip_running;
+static std::atomic<bool> running;
 
 BlockingQueue<PktBufPtr> ip_input;
 Dvt dvt;
@@ -43,13 +43,15 @@ int IpSend(SegBufPtr seg_buf) {
 
   std::lock_guard<std::mutex> lock(rt_lock);
   auto p = rtable.find(seg_buf->dest_ip);
-  if (p == rtable.end())
+  if (p == rtable.end()) {
+    std::cout << "[IP] route to " << seg_buf->dest_ip << " not found " << std::endl;
     return -1;
+  }
 
   pkt_buf->next_hop = p->second;
 
+  //std::cout << "[IP] Send packet " << pkt_buf << std::endl;
   OverlaySend(pkt_buf);
-  std::cout << "[IP] Sent packet " << pkt_buf << std::endl;
 
   return 0;
 }
@@ -144,10 +146,10 @@ static void Input() {
       continue;
 
 #ifdef DEBUG_ROUTING
-    std::cout << "[IP] received packet " << pkt_buf << std::endl;
+    //std::cout << "[IP] received packet " << pkt_buf << std::endl;
 #else
-    if (pkt_buf->packet->header.type != kRouteUpdate)
-      std::cout << "[IP] received packet " << pkt_buf << std::endl;
+    //if (pkt_buf->packet->header.type != kRouteUpdate)
+    //  std::cout << "[IP] received packet " << pkt_buf << std::endl;
 #endif
 
     if (pkt_buf->packet->header.type == kRouteUpdate) {
@@ -235,8 +237,8 @@ int IpMain() {
   std::thread input = std::thread(Input);
   BroadcastInitalRouteInfo();
 
-  RegisterInitSuccess();
   std::cout << "[IP] network layer started" << std::endl;
+  ip_running = true;
 
   while (running)
     std::this_thread::sleep_for(std::chrono::seconds(2));

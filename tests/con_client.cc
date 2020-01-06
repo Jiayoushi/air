@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <iostream>
 
-#include <air/air.h>
+#include <air.h>
 
 #define kServerPort1  8000
 #define kServerPort2  8001

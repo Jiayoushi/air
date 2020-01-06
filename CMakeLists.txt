@@ -4,7 +4,11 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
-include_directories(src)
+include_directories(src/common)
+include_directories(src/tcp)
+include_directories(src/ip)
+include_directories(src/overlay)
+include_directories(src/air)
 include_directories(lib)
 
 add_library(common_lib
@@ -13,11 +17,14 @@ add_library(common_lib
             src/common/send_buffer.cc
             src/common/recv_buffer.cc
             src/common/pkt.cc
+            src/tcp/tcp_input.cc
+            src/tcp/tcp_output.cc
+            src/tcp/tcp_timer.cc
             src/tcp/tcp.cc
             src/ip/ip.cc
-            src/ip/dvt.cc
+            src/ip/ip_dvt.cc
             src/overlay/overlay.cc
-            src/overlay/ntable.cc
+            src/overlay/ov_ntable.cc
             src/air/air.cc)
 
 add_executable(unit_test

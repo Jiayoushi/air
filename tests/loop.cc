@@ -8,9 +8,7 @@
 #include <string>
 #include <iostream>
 
-#include "client/srt_client.h"
-#include "air/air.h"
-#include "ip/ip.h"
+#include <air.h>
 
 int test();
 

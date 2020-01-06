@@ -39,7 +39,7 @@ std::string SegToString(std::shared_ptr<Segment> seg) {
   SegmentHeader &h = seg->header;
 
   std::stringstream ss;
-  ss << "src_port="   << h.src_port << ", dest_port=" << h.dest_port
+  ss << ", src_port=" << h.src_port << ", dest_port=" << h.dest_port
      << ", seq="      << h.seq      << ", ack="       << h.ack
      << ", length="   << h.length   
      << ", ACK="      << bool(h.flags & kAck)

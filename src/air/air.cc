@@ -1,39 +1,29 @@
-#include "air.h"
+#include <air.h>
 
 #include <thread>
 #include <atomic>
 
-#include "tcp/tcp.h"
-#include "ip/ip.h"
-#include "overlay/overlay.h"
-#include "common/common.h"
-
-static std::atomic<int> running;
+#include <tcp.h>
+#include <ip.h>
+#include <overlay.h>
+#include <common.h>
 
 static std::vector<std::thread> modules;
 
 int Init() {
   srand(time(nullptr));
 
-  running = 0;
-
   modules.emplace_back(OverlayMain);
   modules.emplace_back(IpMain);
   modules.emplace_back(TcpMain);
 
-  while (running != 3)
+  while (!tcp_running || !ip_running || !ov_running)
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
   return 0;
 }
 
-void RegisterInitSuccess() {
-  ++running;
-}
-
 int Stop() {
-  running = 0;
-
   if (TcpStop() < 0) {
     std::cerr << "[AIR] tranposrt layer stop failed" << std::endl;
     return -1;

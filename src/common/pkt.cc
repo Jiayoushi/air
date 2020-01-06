@@ -1,6 +1,5 @@
 #include "pkt.h"
 
-#include <arpa/inet.h>
 #include <vector>
 #include <string>
 #include <sstream>
@@ -16,12 +15,7 @@ static std::string GetTypeString(uint16_t type) {
   }
 }
 
-char *IpStr(Ip ip) {
-  struct in_addr a;
-  a.s_addr = ip;
 
-  return inet_ntoa(a);
-}
 
 std::string PktToString(PktPtr pkt) {
   std::stringstream ss;

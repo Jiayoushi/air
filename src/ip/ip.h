@@ -1,8 +1,8 @@
 #ifndef AIR_IP_H_
 #define AIR_IP_H_
 
-#include "common/pkt.h"
-#include "common/seg.h"
+#include <pkt.h>
+#include <seg.h>
 
 int IpSend(SegBufPtr seg_buf);
 int IpStop();
@@ -13,5 +13,7 @@ PktBufPtr IpInputQueuePop();
 
 Ip GetLocalIp();
 int HostnameToIp(const char *hostname);
+
+extern std::atomic<bool> ip_running;
 
 #endif

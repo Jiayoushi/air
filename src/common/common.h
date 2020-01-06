@@ -3,6 +3,7 @@
 
 #include <assert.h>
 #include <iostream>
+#include <arpa/inet.h>
 #include <cstddef>
 #include <netinet/in.h>
 #include <limits>
@@ -26,5 +27,12 @@ const Ip kInvalidIp = 0;
 
 typedef uint32_t Cost;
 const Cost kInvalidCost = std::numeric_limits<Cost>::max();
+
+inline char *IpStr(Ip ip) {
+  struct in_addr a;
+  a.s_addr = ip;
+
+  return inet_ntoa(a);
+}
 
 #endif

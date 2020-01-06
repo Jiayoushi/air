@@ -1,10 +1,10 @@
-#include "dvt.h"
+#include <ip_dvt.h>
 
 #include <cstring>
 #include <vector>
 
-#include "common/pkt.h"
-#include "overlay/overlay.h"
+#include <pkt.h>
+#include <overlay.h>
 
 int Dvt::Init(Ip local_ip) {
   local_ip_ = local_ip;

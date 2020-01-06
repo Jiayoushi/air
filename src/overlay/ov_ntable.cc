@@ -1,8 +1,8 @@
-#include "ntable.h"
+#include <ov_ntable.h>
 
 #include <fstream>
 
-#include "ip/ip.h"
+#include <ip.h>
 
 NeighborTable::NeighborTable() {}
 

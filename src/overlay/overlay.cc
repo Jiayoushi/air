@@ -1,4 +1,4 @@
-#include "overlay.h"
+#include <overlay.h>
 
 #include <signal.h>
 #include <unistd.h>
@@ -7,9 +7,8 @@
 #include <atomic>
 #include <unordered_map>
 
-#include "air/air.h"
-#include "ntable.h"
-#include "ip/ip.h"
+#include <ov_ntable.h>
+#include <ip.h>
 
 #define kWaitFirstStart       0
 #define kWaitSecondStart      1
@@ -20,6 +19,7 @@ const uint16_t kOverlayPort = 6553;    /* Same for all hosts */
 
 NeighborTable nt;
 
+std::atomic<bool> ov_running;
 static std::atomic<bool> running;
 
 static void AcceptNeighbors() {
@@ -304,9 +304,8 @@ int OverlayMain() {
     input_threads.emplace_back(Input, p->first);
   }
 
-  RegisterInitSuccess();
-
   std::cout << "[OVERLAY] overlay started" << std::endl;
+  ov_running = true;
 
   while (running)
     std::this_thread::sleep_for(std::chrono::seconds(2)); 

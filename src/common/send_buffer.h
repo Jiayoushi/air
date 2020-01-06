@@ -17,22 +17,23 @@
 class SendBuffer {
  private:
   uint32_t retry_;
-
   std::list<SegBufPtr> unacked_;
   std::list<SegBufPtr> unsent_;
+
  public:
   SendBuffer():
     retry_(0),
     unacked_(),
     unsent_() {}
 
-  int PushBack(SegBufPtr seg_buf);
+  int PushBack(const void *data, uint32_t len);
+  int PushBackUnacked(SegBufPtr seg_buf);
+  SegBufPtr PopUnacked();
+  SegBufPtr PopUnsent();
+
   void ResendUnacked();
-  void SendTopUnsent();
-  uint32_t SendUnsent();
-  size_t Ack(uint32_t);
+  uint32_t Ack(uint32_t ack);
   void Clear();
-  void PopUnsentFront();
 
   size_t Unacked() { return unacked_.size(); }
   size_t Unsent() { return unsent_.size(); }

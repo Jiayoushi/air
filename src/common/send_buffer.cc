@@ -1,24 +1,33 @@
-#include "send_buffer.h"
+#include <send_buffer.h>
 
-#include "common.h"
-#include "ip/ip.h"
+#include <cstring>
+#include <common.h>
+#include <ip.h>
 
-int SendBuffer::PushBack(SegBufPtr seg_buf) {
+int SendBuffer::PushBack(const void *data, uint32_t len) {
   if (Full())
     return -1;
 
-  unsent_.push_back(seg_buf);
-  SendUnsent();
+  SegBufPtr seg_buf = std::make_shared<SegmentBuffer>();
+  memcpy(seg_buf->segment->data, data, len);
 
+  unsent_.push_back(seg_buf);
+  return 0;
+}
+
+int SendBuffer::PushBackUnacked(SegBufPtr seg_buf) {
+  if (Full())
+    return -1;
+
+  unacked_.push_back(seg_buf);
   return 0;
 }
 
 // Go-Back-N: resend all unacked
 void SendBuffer::ResendUnacked() {
   for (auto p = unacked_.begin(); p != unacked_.end(); ++p) {
+    std::cout << "[TCP] [RESEND] " << *p << std::endl;
     IpSend(*p);
-
-    CDEBUG << "RESEND: " << *p << std::endl;
     (*p)->send_time = GetCurrentTime();
   }
 
@@ -33,48 +42,39 @@ bool SendBuffer::Timeout() const {
          std::chrono::milliseconds(kTimeoutIntervalInMs);
 }
 
-void SendBuffer::PopUnsentFront() {
-  unacked_.pop_front();
-}
-
-void SendBuffer::SendTopUnsent() {
+SegBufPtr SendBuffer::PopUnsent() {
   if (unsent_.empty())
-    return;
+    return nullptr;
 
   SegBufPtr seg_buf = unsent_.front();
-  IpSend(seg_buf);
-  CDEBUG << "Send: " << seg_buf << std::endl;
-
-  unacked_.push_back(seg_buf);
   unsent_.pop_front();
+  return seg_buf;
 }
 
-uint32_t SendBuffer::SendUnsent() {
-  uint32_t count = 0;
-  while (!unsent_.empty()) {
-    SendTopUnsent();
-    ++count;
-  }
-  return count;
+SegBufPtr SendBuffer::PopUnacked() {
+  if (unacked_.empty())
+    return nullptr;
+
+  SegBufPtr seg_buf = unacked_.front();
+  unacked_.pop_front();
+  return seg_buf;
 }
 
-size_t SendBuffer::Ack(uint32_t ack) {
+uint32_t SendBuffer::Ack(uint32_t ack) {
   if (unacked_.empty()) {
     CDEBUG << "unacked empty" << std::endl;
     return -1;
   }
 
-  size_t count = 0;
-  while (!unacked_.empty()
-      && unacked_.front()->segment->header.seq < ack) {
-
+  uint32_t last_acked = 0;
+  while (!unacked_.empty() && unacked_.front()->segment->header.seq < ack) {
+    last_acked = unacked_.front()->segment->header.seq;
     unacked_.front()->acked_time = GetCurrentTime();
     unacked_.pop_front();
-    ++count;
   }
 
-  if (count != 0)
+  if (last_acked != 0)
     retry_ = 0;
 
-  return count;
+  return last_acked;
 }

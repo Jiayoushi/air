@@ -63,7 +63,10 @@ struct SegmentBuffer {
   Timepoint acked_time;               /* The first time this segment was acked */
 
   SegmentBuffer(std::shared_ptr<Segment> s=nullptr, uint32_t size=0, Ip sip=0, Ip dip=0):
-   segment(s), data_size(size), src_ip(sip), dest_ip(dip), send_time(), acked_time() {}
+   segment(s), data_size(size), src_ip(sip), dest_ip(dip), send_time(), acked_time() {
+     if (segment == nullptr)
+       segment = std::make_shared<Segment>();
+   }
 };
 
 uint16_t Checksum(std::shared_ptr<Segment> seg, uint32_t size);
@@ -73,6 +76,9 @@ bool ValidChecksum(std::shared_ptr<Segment> seg, uint32_t size);
 std::string SegToString(std::shared_ptr<Segment> seg);
 
 inline std::ostream &operator<<(std::ostream &out, SegBufPtr seg_buf) {
+  out << "src_ip=" << IpStr(seg_buf->src_ip)
+      << ", dest_ip=" << IpStr(seg_buf->dest_ip);
+
   out << SegToString(seg_buf->segment);
 
   out << ", len=" << seg_buf->data_size;

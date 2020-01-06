@@ -12,8 +12,7 @@
 #include <time.h>
 #include <iostream>
 
-#include "server/srt_server.h"
-#include "air/air.h"
+#include <air.h>
 
 #define kServerPort1 8000
 #define kServerPort2 8001
@@ -25,11 +24,8 @@ const char *hostname = "turtle.zoo.cs.yale.edu";
 int main() {
   Init();
 
-  SrtServerInit();
-  std::cerr << "Server Init success" << std::endl;
-
   // Open 1
-  int sockfd = SrtServerSock();
+  int sockfd = Sock();
   if (sockfd < 0) {
     std::cerr << "can't create srt socket1" << std::endl;
     exit(EXIT_FAILURE);
@@ -41,31 +37,31 @@ int main() {
   memcpy(&server_addr.sin_addr, he->h_addr_list[0], he->h_length);
   uint32_t server_ip = server_addr.sin_addr.s_addr;
 
-  if (SrtServerBind(sockfd, server_ip, kServerPort1) < 0) {
+  if (Bind(sockfd, server_ip, kServerPort1) < 0) {
     std::cerr << "srt_server_bind #1 failed" << std::endl;
     exit(-1);
   }
   std::cout << "Binded" << std::endl;
 
-  if (SrtServerAccept(sockfd) < 0) {
+  if (Accept(sockfd) < 0) {
     std::cerr << "srt_server accept #1 failed" << std::endl;
     exit(-1);
   }
   std::cerr << "Accept #1 succeed" << std::endl;
 
   // Open 2
-  int sockfd2 = SrtServerSock();
+  int sockfd2 = Sock();
   if (sockfd2 < 0) {
     std::cerr << "can't create srt socket2" << std::endl;
     exit(EXIT_FAILURE);
   }
 
-  if (SrtServerBind(sockfd2, server_ip, kServerPort2) < 0) {
+  if (Bind(sockfd2, server_ip, kServerPort2) < 0) {
     std::cerr << "srt_server_bind #2 failed" << std::endl;
     exit(-1);
   }
 
-  if (SrtServerAccept(sockfd2) < 0) {
+  if (Accept(sockfd2) < 0) {
     std::cerr << "srt_server accept #2 failed" << std::endl;
     exit(-1);
   }
@@ -76,21 +72,18 @@ int main() {
 
   std::cerr << "Attempt to close connecion #1" << std::endl;
   // Close 1
-  if (SrtServerClose(sockfd) < 0) {
+  if (Close(sockfd) < 0) {
     std::cerr << "can't destroy srt socket" << std::endl;
     exit(EXIT_FAILURE);
   }
   std::cerr << "Connection #1 closed" << std::endl;
 
   // Close 2
-  if (SrtServerClose(sockfd2) < 0) {
+  if (Close(sockfd2) < 0) {
     std::cerr << "can't destroy srt socket" << std::endl;
     exit(EXIT_FAILURE);
   }
   std::cerr << "Connection #2 closed" << std::endl;
-
-  SrtServerShutdown();
-  std::cerr << "shutdown " << std::endl;
 
   Stop();
   std::cout << "Stopped" << std::endl;
