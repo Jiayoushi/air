@@ -17,7 +17,7 @@
 #define kServerPort1 8000
 #define kServerPort2 8001
 
-#define kWaitTime    6
+#define kWaitTime    5
 
 const char *hostname = "turtle.zoo.cs.yale.edu";
 
@@ -70,7 +70,7 @@ int main() {
   // Sleep
   sleep(kWaitTime);
 
-  std::cerr << "Attempt to close connecion #1" << std::endl;
+  std::cerr << "Close connecion #1" << std::endl;
   // Close 1
   if (Close(sockfd) < 0) {
     std::cerr << "can't destroy srt socket" << std::endl;
@@ -78,6 +78,9 @@ int main() {
   }
   std::cerr << "Connection #1 closed" << std::endl;
 
+  sleep(kWaitTime * 2);
+
+  std::cerr << "Close connecion #2" << std::endl;
   // Close 2
   if (Close(sockfd2) < 0) {
     std::cerr << "can't destroy srt socket" << std::endl;

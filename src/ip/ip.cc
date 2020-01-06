@@ -19,7 +19,7 @@
 #include <ip_dvt.h>
 #include <overlay.h>
 
-std::atomic<bool> ip_running;
+static std::atomic<bool> initialized;
 static std::atomic<bool> running;
 
 BlockingQueue<PktBufPtr> ip_input;
@@ -227,6 +227,10 @@ int HostnameToIp(const char *hostname) {
   return -1;
 }
 
+bool IpInitialized() {
+  return initialized;
+}
+
 int IpMain() {
   std::cout << "[IP] network layer starting ..." << std::endl;
 
@@ -237,8 +241,8 @@ int IpMain() {
   std::thread input = std::thread(Input);
   BroadcastInitalRouteInfo();
 
+  initialized = true;
   std::cout << "[IP] network layer started" << std::endl;
-  ip_running = true;
 
   while (running)
     std::this_thread::sleep_for(std::chrono::seconds(2));

@@ -11,7 +11,7 @@
 
 #define kTimerNum             7
 #define kTimeoutInterval      500      /* 500ms */
-#define kTimeWaitPeriod       10       /* 10 intervals */
-#define kRetransmitTimeout    10       /* 10 intervals */
+#define kTimeWaitPeriod       1
+#define kRetransmitTimeout    10
 
 #endif

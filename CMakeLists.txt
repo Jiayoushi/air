@@ -12,14 +12,14 @@ include_directories(src/air)
 include_directories(lib)
 
 add_library(common_lib
-            src/common/seg.cc
             src/common/timer.cc
-            src/common/send_buffer.cc
-            src/common/recv_buffer.cc
+            src/common/seg.cc
             src/common/pkt.cc
             src/tcp/tcp_input.cc
             src/tcp/tcp_output.cc
             src/tcp/tcp_timer.cc
+            src/tcp/tcp_send_buffer.cc
+            src/tcp/tcp_recv_buffer.cc
             src/tcp/tcp.cc
             src/ip/ip.cc
             src/ip/ip_dvt.cc

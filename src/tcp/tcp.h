@@ -8,8 +8,8 @@
 
 #include <tcp_fsm.h>
 #include <tcp_timer.h>
-#include <send_buffer.h>
-#include <recv_buffer.h>
+#include <tcp_send_buffer.h>
+#include <tcp_recv_buffer.h>
 #include <seg.h>
 
 #define kMaxConnection        1024
@@ -68,7 +68,6 @@ struct Tcb {
 // TODO: better to provide API
 extern std::mutex tcb_table_lock;
 extern std::vector<TcbPtr> tcb_table;
-extern std::atomic<bool> tcp_running;
 
 int TcpMain();
 int TcpStop();
@@ -78,6 +77,7 @@ int TcpOutput(TcbPtr tcb);
 int TcpInputQueuePush(SegBufPtr seg_buf);
 int Teardown(int sockfd);
 bool TcpRunning();
+bool TcpInitialized();
 void TcpTimeout();
 int TcpDemultiplex(SegBufPtr seg_buf);
 SegBufPtr TcpInputQueuePop();

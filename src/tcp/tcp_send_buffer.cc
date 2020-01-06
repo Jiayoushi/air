@@ -1,4 +1,4 @@
-#include <send_buffer.h>
+#include <tcp_send_buffer.h>
 
 #include <cstring>
 #include <common.h>
@@ -61,10 +61,8 @@ SegBufPtr SendBuffer::PopUnacked() {
 }
 
 uint32_t SendBuffer::Ack(uint32_t ack) {
-  if (unacked_.empty()) {
-    CDEBUG << "unacked empty" << std::endl;
-    return -1;
-  }
+  if (unacked_.empty())
+    return 0;
 
   uint32_t last_acked = 0;
   while (!unacked_.empty() && unacked_.front()->segment->header.seq < ack) {

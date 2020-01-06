@@ -5,7 +5,7 @@
 #include <tcp.h>
 
 void TcpTimeout() {
-  while (tcp_running) {
+  while (TcpRunning()) {
     for (int tcb_id = 0; tcb_id < kMaxConnection; ++tcb_id) {
       TcbPtr tcb = tcb_table[tcb_id];
       if (!tcb)
@@ -13,10 +13,10 @@ void TcpTimeout() {
 
       /* Time wait timeout */
       if (tcb->timer_flags & kTimeWaitTimer) {
-        if (++tcb->timers[kTimeWaitTimer] == 0) {
+        if (--tcb->timers[kTimeWaitTimer] == 0) {
           tcb->state = kClosed;
-          // TODO: close it
-          std::cout << "[TCP] time wait timed out, " << tcb_id << " is now closed" << std::endl;
+          std::cout << "[TCP] time wait timed out " << tcb_id << " is now closed" << std::endl;
+	  tcb->waiting.notify_one();
         }
 	continue;
       }

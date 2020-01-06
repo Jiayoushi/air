@@ -8,6 +8,7 @@ void TcpInputFromIp() {
       break;
 
     if (seg_buf != nullptr) {
+      std::cout << std::endl;
       TcpInput(seg_buf);
     }
   }
@@ -51,6 +52,7 @@ int TcpInput(SegBufPtr seg_buf) {
       tcb->dest_port = seg->header.src_port;
       tcb->irs = seg->header.seq;
       tcb->rcv_nxt = tcb->irs + 1;
+      tcb->send_buffer.Clear();
       goto OUTPUT;
     }
     /* If ACK of our SYN, connection completed */
@@ -66,6 +68,7 @@ int TcpInput(SegBufPtr seg_buf) {
       tcb->state = kConnected;
       tcb->irs = seg->header.seq;
       tcb->rcv_nxt = tcb->irs + 1;
+      tcb->send_buffer.Clear();
       tcb->waiting.notify_one();
       goto OUTPUT;
     }
@@ -97,12 +100,15 @@ int TcpInput(SegBufPtr seg_buf) {
       case kTimeWait: {
         uint32_t last_acked = tcb->send_buffer.Ack(seg->header.ack);
         std::cout << "[TCP] [Last Acked] " << last_acked << std::endl;
+        if (last_acked == 0)
+	  break;
 
 	switch (tcb->state) {
           case kFinWait1: {
-            if (last_acked != tcb->snd_nxt)
+            if (last_acked + 1 != tcb->snd_nxt)
 	      return 0;
 
+	    std::cout << "[TCP] [Fin Wait 2]" << std::endl;
             tcb->state = kFinWait2;
 	    break;
           }
@@ -111,13 +117,16 @@ int TcpInput(SegBufPtr seg_buf) {
 	    break;
 	  }
           case kLastAck: {
-            if (last_acked != tcb->snd_nxt)
+            if (last_acked + 1 != tcb->snd_nxt)
 	      return 0;
 
+	    std::cout << "[TCP] [Closed]" << std::endl;
 	    tcb->state = kClosed;
+	    tcb->waiting.notify_one();
 	    break;
           }
 	  case kTimeWait: {
+	    tcb->timer_flags |= kTimeWaitTimer;
             tcb->timers[kTimeWaitTimer] = kTimeWaitPeriod;
 	    break;
           }
@@ -131,25 +140,34 @@ int TcpInput(SegBufPtr seg_buf) {
 
   /* Handle Fin */
   if (flags & kFin) {
+    if (seg->header.seq != tcb->rcv_nxt)
+      return 0;
+
     switch (tcb->state) {
       case kSynRcvd:
       case kConnected: {
+	std::cout << "[TCP] [Close Wait]" << std::endl;
+        tcb->rcv_nxt += 1;
         tcb->state = kCloseWait;
 	break;
       }
       case kFinWait1: {
+	std::cout << "[TCP] [Closing]" << std::endl;
         tcb->state = kClosing;
 	break;
       }
       case kFinWait2: {
+	std::cout << "[TCP] [Time Wait]" << std::endl;
+        tcb->rcv_nxt += 1;
         tcb->state = kTimeWait;
-	// TODO: turn off other timers
+        tcb->timer_flags = kTimeWaitTimer;
 	tcb->timers[kTimeWaitTimer] = kTimeWaitPeriod;
-        break;
+	goto OUTPUT;
       }
       case kTimeWait: {
-        tcb->timers[kTimeWaitTimer] = kTimeWaitPeriod;
-        break;
+        tcb->timer_flags = kTimeWaitTimer;
+	tcb->timers[kTimeWaitTimer] = kTimeWaitPeriod;
+	goto OUTPUT;
       }
       default:
 	break;
@@ -157,8 +175,8 @@ int TcpInput(SegBufPtr seg_buf) {
   }
 
 OUTPUT:
-  TcpOutput(tcb);
-  return 0;
+  if (!PureAck(seg_buf))
+    TcpOutput(tcb);
 
 RETURN:
   return 0;

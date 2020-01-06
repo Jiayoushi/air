@@ -1,5 +1,0 @@
-1. Connection timeout
-2. Refactor into one
-3. copy data into buffer and use cast
-4. replace overlay multitreahding with epoll
-5. get rid of common.h

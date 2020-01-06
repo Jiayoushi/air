@@ -19,7 +19,7 @@ const uint16_t kOverlayPort = 6553;    /* Same for all hosts */
 
 NeighborTable nt;
 
-std::atomic<bool> ov_running;
+static std::atomic<bool> initialized;
 static std::atomic<bool> running;
 
 static void AcceptNeighbors() {
@@ -273,6 +273,10 @@ Cost GetCost(Ip from, Ip to) {
   return nt.GetCost(from, to);
 }
 
+bool OverlayInitialized() {
+  return initialized;
+}
+
 int OverlayMain() {
   std::cout << "[OVERLAY] Overlay layer starting ..." << std::endl;
 
@@ -305,7 +309,7 @@ int OverlayMain() {
   }
 
   std::cout << "[OVERLAY] overlay started" << std::endl;
-  ov_running = true;
+  initialized = true;
 
   while (running)
     std::this_thread::sleep_for(std::chrono::seconds(2)); 

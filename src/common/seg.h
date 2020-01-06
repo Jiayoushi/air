@@ -32,7 +32,7 @@ struct SegmentHeader {
   uint32_t seq;
   uint32_t ack;
   uint16_t length;       /* Header length */
-  uint16_t flags;         /* ACK, FIN, PUSH, RST, SYN, URG */
+  uint16_t flags;        /* ACK, FIN, PUSH, RST, SYN, URG */
   uint16_t rcv_win;
   uint16_t checksum;
 
@@ -84,6 +84,14 @@ inline std::ostream &operator<<(std::ostream &out, SegBufPtr seg_buf) {
   out << ", len=" << seg_buf->data_size;
 
   return out;
+}
+
+inline bool PureAck(SegBufPtr seg_buf) {
+  return seg_buf->data_size == 0 
+      && seg_buf->segment->header.seq == 0
+      && !(seg_buf->segment->header.flags & kSyn)
+      && !(seg_buf->segment->header.flags & kFin)
+      && (seg_buf->segment->header.flags & kAck);
 }
 
 #endif

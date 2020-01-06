@@ -14,6 +14,6 @@ PktBufPtr IpInputQueuePop();
 Ip GetLocalIp();
 int HostnameToIp(const char *hostname);
 
-extern std::atomic<bool> ip_running;
+bool IpInitialized();
 
 #endif

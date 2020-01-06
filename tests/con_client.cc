@@ -62,6 +62,7 @@ int main() {
   // Sleep
   sleep(kWaitTime);
 
+  std::cout << "Closing connection #1" << std::endl;
   // Close second connection
   if (Close(sockfd) < 0) {
     std::cerr << "Failed to close srt client" << std::endl;
@@ -69,6 +70,7 @@ int main() {
   }
   std::cerr << "connection #1 closed " << std::endl;
 
+  std::cout << "Closing connection #2" << std::endl;
   if (Close(sockfd2) < 0) {
     std::cerr << "Failed to close srt client" << std::endl;
     exit(EXIT_FAILURE);

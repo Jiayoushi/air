@@ -4,22 +4,31 @@
 #include <ip.h>
 
 #define kOutputAck  (1 << 0)
-#define kOutputSyn  (1 << 1)
-#define kOutputSeq  (1 << 2)  /* Consumes sequence number */
-#define kOutputDat  (1 << 3)  /* Can carray data */
-#define kOutputFin  (1 << 4)
+#define kOutputSeq  (1 << 1)  /* Consumes sequence number */
+#define kOutputDat  (1 << 2)  /* Can carray data */
+#define kOutputSyn  ((1 << 3) | (1 << 1))
+#define kOutputFin  ((1 << 4) | (1 << 1))
 
 int output_flags[] =
 {
- /* kClosed */     kOutputSyn | kOutputSeq,
- /* kSynSent */    0,
+ /* kClosed */     0,
+ /* kSynSent */    kOutputSyn,
  /* kConnected */  kOutputAck | kOutputDat,
  /* kListening */  kOutputSyn | kOutputAck,
- /* kSynRcvd */    kOutputSyn | kOutputSeq | kOutputAck,
- /* kFinWait1 */   kOutputFin | kOutputSeq
+ /* kSynRcvd */    kOutputSyn | kOutputAck,
+ /* kFinWait1 */   kOutputFin | kOutputAck,
+ /* kFinWait2 */   0,
+ /* kTimeWait */   kOutputAck,
+ /* kCloseWait */  kOutputAck,
+ /* kClosing */    0,
+ /* kLastAck */    kOutputFin | kOutputAck,
+ /* kClosed */     0,
 };
 
 int TcpOutput(TcbPtr tcb) {
+  if (tcb->state == kClosed)
+    return 0;
+
   SegBufPtr seg_buf;
   int flags = output_flags[tcb->state];
 
@@ -44,18 +53,25 @@ int TcpOutput(TcbPtr tcb) {
     hdr.ack = tcb->rcv_nxt;
 
   /* Sequence number */
-  if (flags & kOutputSyn)
-    hdr.seq = tcb->iss;
-  else if (flags & kOutputSeq)
+  if ((flags & kOutputSyn) == kOutputSyn)
+    tcb->snd_nxt = tcb->iss;
+  if (flags & kOutputSeq)
     hdr.seq = tcb->snd_nxt;
 
   /* Flags */
-  if (flags & kOutputSyn)
+  if ((flags & kOutputSyn) == kOutputSyn)
     hdr.flags |= kSyn;
   if (flags & kOutputAck)
     hdr.flags |= kAck;
+  if ((flags & kOutputFin) == kOutputFin)
+    hdr.flags |= kFin;
 
   hdr.checksum = Checksum(seg_buf->segment, seg_buf->data_size + sizeof(SegmentHeader));
+
+  /* Update */
+  if ((flags & kOutputSyn) == kOutputSyn || 
+      (flags & kOutputFin) == kOutputFin)
+    tcb->snd_nxt += 1;
 
   /* Fill the buffer's information */
   seg_buf->dest_ip = tcb->dest_ip;

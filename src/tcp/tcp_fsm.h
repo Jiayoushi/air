@@ -9,10 +9,9 @@
 #define kFinWait1             5
 #define kFinWait2             6
 #define kTimeWait             7
-#define kCoseWait             8
-#define kCloseWait            9
-#define kClosing              10
-#define kLastAck              11
+#define kCloseWait            8
+#define kClosing              9
+#define kLastAck              10
 
 
 

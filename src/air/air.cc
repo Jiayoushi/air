@@ -17,7 +17,7 @@ int Init() {
   modules.emplace_back(IpMain);
   modules.emplace_back(TcpMain);
 
-  while (!tcp_running || !ip_running || !ov_running)
+  while (!TcpInitialized()|| !IpInitialized() || !OverlayInitialized())
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
   return 0;

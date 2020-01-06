@@ -18,7 +18,7 @@
 #include <timer.h>
 #include <blocking_queue.h>
 #include <common.h>
-#include <send_buffer.h>
+#include <tcp_send_buffer.h>
 #include <ip.h>
 #include <overlay.h>
 
@@ -31,8 +31,8 @@
 std::mutex tcb_table_lock;
 std::vector<TcbPtr> tcb_table;
 
-std::atomic<bool> tcp_running;
-static std::atomic<bool> running;                                  /* Control the running of all threads. */
+static std::atomic<bool> running;
+static std::atomic<bool> initialized;                                  /* Control the running of all threads. */
 static std::shared_ptr<std::thread> timeout_thread;                /* Timeout loop */
 static std::shared_ptr<std::thread> input_thread;                  /* Receiving segments from network stack */
 static BlockingQueue<SegBufPtr> tcp_input;
@@ -56,10 +56,11 @@ int Sock() {
 static int PassiveClose(TcbPtr tcb) {
   std::unique_lock<std::mutex> lk(tcb->lock);
 
-  TcpOutput(tcb);
-
   /* Update */
   tcb->state = kLastAck;
+  std::cout << "[TCP] [Last Ack]" << std::endl;
+
+  TcpOutput(tcb);
 
   tcb->waiting.wait(lk,
     [&tcb] {
@@ -76,9 +77,12 @@ static int PassiveClose(TcbPtr tcb) {
 int Close(int sockfd) {
   TcbPtr tcb = tcb_table[sockfd];
 
+  if (tcb->state == kClosed)
+    return 0;
+
   if (tcb->state == kCloseWait)
     PassiveClose(tcb);
-  else if (tcb->state != kClosed)
+  else
     Teardown(sockfd);
 
   tcb_table[sockfd] = nullptr;
@@ -157,9 +161,10 @@ int Connect(int sockfd, Ip dest_ip, uint16_t dest_port) {
 
   tcb->iss = 10; // TODO: testing purpose
 
-  TcpOutput(tcb);
-
+  std::cout << "[TCP] [Syn Sent]" << std::endl;
   tcb->state = kSynSent;
+
+  TcpOutput(tcb);
 
   /* Blocked until connection timeout or success */
   tcb->waiting.wait(lk,
@@ -185,12 +190,13 @@ int Teardown(int sockfd) {
   if (tcb == nullptr)
     return -1;
 
+  std::cout << "[TCP] Teardown....." << std::endl;
   std::unique_lock<std::mutex> lk(tcb->lock);
 
-  TcpOutput(tcb);
-
-  /* Update */
+  std::cout << "[TCP] [Fin Wait 1]" << std::endl;
   tcb->state = kFinWait1;
+
+  TcpOutput(tcb);
 
   tcb->waiting.wait(lk,
     [&tcb] {
@@ -222,6 +228,7 @@ int Accept(int sockfd) {
   if (tcb == nullptr)
     return -1;
 
+  std::cout << "[TCP] [Listening]" << std::endl;
   tcb->state = kListening;
   tcb->iss = 100; // TODO: testing purpose
 
@@ -309,8 +316,8 @@ int TcpMain() {
   running = true;
   input_thread = std::make_shared<std::thread>(TcpInputFromIp);
   timeout_thread = std::make_shared<std::thread>(TcpTimeout);
-  tcp_running = true;
 
+  initialized = true;
   std::cout << "[TCP] transport layer started" << std::endl;
 
   return 0;
@@ -318,6 +325,10 @@ int TcpMain() {
 
 bool TcpRunning() {
   return running;
+}
+
+bool TcpInitialized() {
+  return initialized;
 }
 
 int TcpStop() {
