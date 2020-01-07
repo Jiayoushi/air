@@ -1,6 +1,6 @@
 # air
 
-## Status:
+## Features:
 - three-way handshake
 - four-way teardown
 - Go-Back-N ARQ
