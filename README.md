@@ -2,8 +2,8 @@
 
 ## Features
 - Unidirectional Data Flow
-- three-way handshake
-- four-way teardown
+- Three-way handshake
+- Tour-way teardown
 - Go-Back-N ARQ
 - Distance Vector Routing
 
