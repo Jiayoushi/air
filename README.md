@@ -1,13 +1,13 @@
 # air
 
-## Features:
+## Features
 - Unidirectional Data Flow
 - three-way handshake
 - four-way teardown
 - Go-Back-N ARQ
 - Distance Vector Routing
 
-## Compile:
+## Compile
 ```
 cmake .
 make
