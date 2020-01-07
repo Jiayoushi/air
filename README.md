@@ -1,9 +1,16 @@
 # air
 
-Status: [ONGOING]
+## Status:
+- three-way handshake
+- four-way teardown
+- Go-Back-N ARQ
+- Distance Vector Routing
 
-TODO:
-- fix close wait
-- two-way handshake -> three-way
-- reverse path forwarding
-- c/s -> tcp
+## Compile:
+```
+cmake .
+make
+```
+
+## Usage
+See example program in tests 
