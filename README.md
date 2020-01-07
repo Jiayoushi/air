@@ -1,6 +1,7 @@
 # air
 
 ## Features:
+- Unidirectional Data Flow
 - three-way handshake
 - four-way teardown
 - Go-Back-N ARQ
