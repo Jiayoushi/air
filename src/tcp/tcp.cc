@@ -25,8 +25,8 @@
 #define kSegmentLost          0
 #define kSegmentError         1
 #define kSegmentIntact        2
-#define kPacketLossRate       0
-#define kPacketErrorRate      0
+#define kPacketLossRate       0.13
+#define kPacketErrorRate      0.13
 
 std::mutex tcb_table_lock;
 std::vector<TcbPtr> tcb_table;
@@ -103,7 +103,8 @@ size_t Send(int sockfd, const void *data, uint32_t length) {
     size_t size = std::min(seg_len, kMss);
 
     tcb->send_buffer.PushBack(p, size);
- 
+    TcpOutput(tcb);
+
     p += size;
     seg_len -= size;
   }
@@ -119,20 +120,23 @@ size_t Recv(int sockfd, void *buffer, unsigned int length) {
   std::unique_lock<std::mutex> lk(tcb->lock);
 
   size_t recved = 0;
-  while (recved < length) {
-    std::cout << "[TCP] " << "Recv Current " << recved << " expect " << length << std::endl;
+  while (1) {
+    std::cout << "[TCP] " << "Recv: Recved so far: " << recved << " expect " << length << std::endl;
     tcb->waiting.wait(lk,
       [&tcb] {
         return !tcb->recv_buffer.Empty();
       });
 
-    while (!tcb->recv_buffer.Empty()) {
+    while (recved < length && !tcb->recv_buffer.Empty()) {
       SegBufPtr seg_buf = tcb->recv_buffer.Front();
       tcb->recv_buffer.Pop();
 
       memcpy((char *)buffer + recved, seg_buf->segment->data, seg_buf->data_size);
       recved += seg_buf->data_size;
     }
+
+    if (recved == length)
+      break;
   }
 
   return recved;
@@ -160,6 +164,7 @@ int Connect(int sockfd, Ip dest_ip, uint16_t dest_port) {
   tcb->dest_port = dest_port;
 
   tcb->iss = 10; // TODO: testing purpose
+  tcb->snd_nxt = tcb->iss;
 
   std::cout << "[TCP] [Syn Sent]" << std::endl;
   tcb->state = kSynSent;
@@ -231,6 +236,7 @@ int Accept(int sockfd) {
   std::cout << "[TCP] [Listening]" << std::endl;
   tcb->state = kListening;
   tcb->iss = 100; // TODO: testing purpose
+  tcb->snd_nxt = tcb->iss;
 
   // Blocked until input notify that the state is connected
   std::unique_lock<std::mutex> lk(tcb->lock);

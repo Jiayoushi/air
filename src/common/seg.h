@@ -81,7 +81,7 @@ inline std::ostream &operator<<(std::ostream &out, SegBufPtr seg_buf) {
 
   out << SegToString(seg_buf->segment);
 
-  out << ", len=" << seg_buf->data_size;
+  out << ", data_size=" << seg_buf->data_size;
 
   return out;
 }

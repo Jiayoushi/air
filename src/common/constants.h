@@ -6,7 +6,7 @@
 #include "common.h"
 #include "seg.h"
 
-#define kGbnWindowSize                  10
+#define kGbnWindowSize                  15
 #define kUnsentCapacity                 100
 #define kMaxSynRetry                    100
 

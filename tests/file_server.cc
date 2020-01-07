@@ -8,32 +8,27 @@
 #include <string>
 #include <iostream>
 
-#include "server/srt_server.h"
-#include "air/air.h"
-#include "ip/ip.h"
+#include <air.h>
 
-int test(const char *, const char *);
+#define server_port 8000
+
+const char *server_hostname = "turtle.zoo.cs.yale.edu";
 
 typedef in_addr_t Ip;
 
-int main(int argc, char *argv[]) {
-  if (argc != 3) {
-    std::cerr << "Usage: ./a.out <server hostname> <server port>" << std::endl;
-    return -1;
-  }
+int test();
 
-  return test(argv[1], argv[2]);
+int main(int argc, char *argv[]) {
+  return test();
 }
 
-int test(const char *server_hostname, const char *server_port) {
+int test() {
   Init();
 
-  SrtServerInit();
-
   // Create socket
-  int sockfd = SrtServerSock();
+  int sockfd = Sock();
   if (sockfd < 0) {
-    std::cerr << "srt_server_sock failed" << std::endl;
+    std::cerr << "Sock failed" << std::endl;
     exit(-1);
   }
   
@@ -41,14 +36,14 @@ int test(const char *server_hostname, const char *server_port) {
   struct sockaddr_in server_addr;
   memcpy(&server_addr.sin_addr, he->h_addr_list[0], he->h_length);
 
-  if (SrtServerBind(sockfd, server_addr.sin_addr.s_addr, std::stoi(server_port)) < 0) {
-    std::cerr << "srt_server_bind failed" << std::endl;
+  if (Bind(sockfd, server_addr.sin_addr.s_addr, server_port) < 0) {
+    std::cerr << "Bind failed" << std::endl;
     exit(-1);
   }
 
   // Connect to client
-  if (SrtServerAccept(sockfd) < 0) {
-    std::cerr << "srt_server_accept failed" << std::endl;
+  if (Accept(sockfd) < 0) {
+    std::cerr << "Accept failed" << std::endl;
     exit(-1);
   }
 
@@ -71,7 +66,7 @@ int test(const char *server_hostname, const char *server_port) {
 
   size_t expected_len = strlen(str.c_str());
   size_t len = 0;
-  size_t recved = SrtServerRecv(sockfd, &len, sizeof(size_t));
+  size_t recved = Recv(sockfd, &len, sizeof(size_t));
   if (recved != sizeof(size_t)) {
     std::cerr << "Recv #1 failed, unexpected size, expected " << sizeof(size_t) << " got " << recved << std::endl;
     exit(-1);
@@ -82,10 +77,12 @@ int test(const char *server_hostname, const char *server_port) {
   }
 
   char buf[5000];
-  size_t recved2 = SrtServerRecv(sockfd, buf, expected_len);
+  size_t recved2 = Recv(sockfd, buf, expected_len);
   if (recved2 != expected_len) {
     std::cerr << "Recv #2 failed, unexpected length received, expected " << expected_len << " got " << recved2 << std::endl;
     exit(-1);
+  } else {
+    std::cout << "Recvd " << recved2 << " bytes" << std::endl;
   }
 
   buf[recved2] = 0;
@@ -95,19 +92,18 @@ int test(const char *server_hostname, const char *server_port) {
     std::cerr << "Recv #2 succeed. correct file content." << std::endl;
   }
 
-  sleep(6);
+  sleep(5);
 
-  if(SrtServerClose(sockfd) < 0) {
+  std::cout << "Closing..." << std::endl;
+  if(Close(sockfd) < 0) {
     std::cerr << "fail to close srt server" << std::endl;
     exit(-1);
   }
-  std::cout << "socket closed" << std::endl;
-
-  SrtServerShutdown();
-  std::cout << "tcp shutdown" << std::endl;
+  std::cout << "Closed" << std::endl;
 
   Stop();
-  std::cerr << "Test success" << std::endl;
+  std::cout << "Stopped" << std::endl;
 
+  std::cerr << "Test success" << std::endl;
   return 0;
 }

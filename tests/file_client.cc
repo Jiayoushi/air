@@ -8,46 +8,39 @@
 #include <string>
 #include <iostream>
 
-#include "client/srt_client.h"
-#include "air/air.h"
-#include "ip/ip.h"
+#include <air.h>
 
-int test(const char *, const char *);
+#define server_port 8000
+
+const char *hostname = "turtle.zoo.cs.yale.edu";
+
+int test();
 
 int main(int argc, char *argv[]) {
-  if (argc != 3) {
-    std::cerr << "Usage: ./a.out <server hostname> <server port>" << std::endl;
-    return -1;
-  }
-
-  return test(argv[1], argv[2]);
+  return test();
 }
 
-int test(const char *server_hostname, const char *server_port) {
+int test() {
   Init();
 
-  SrtClientInit();
-
   // Create socket
-  int sockfd = SrtClientSock();
+  int sockfd = Sock();
   if (sockfd < 0) {
-    std::cerr << "srt_client_sock failed" << std::endl;
+    std::cerr << "Sock failed" << std::endl;
     exit(-1);
   }
  
-  uint16_t port = atoi(server_port);
-  struct hostent *he = gethostbyname(server_hostname);
+  uint16_t port = server_port;
+  struct hostent *he = gethostbyname(hostname);
   struct sockaddr_in server_addr;
   memcpy(&server_addr.sin_addr, he->h_addr_list[0], he->h_length);
 
   // Connect
-  if (SrtClientConnect(sockfd, server_addr.sin_addr.s_addr, port) < 0) {
-    std::cerr << "srt_client_connect failed" << std::endl;
+  if (Connect(sockfd, server_addr.sin_addr.s_addr, port) < 0) {
+    std::cerr << "Connect failed" << std::endl;
     exit(-1);
   }
-
   std::cerr << "Connected" << std::endl;
-
 
   std::ifstream ifs("tests/send_this.txt");
   if (!ifs.is_open()) {
@@ -61,31 +54,24 @@ int test(const char *server_hostname, const char *server_port) {
   size_t len = strlen(str.c_str());
   uint32_t k = sizeof(size_t);
 
-  SrtClientSend(sockfd, &len, k);
+  size_t sent = Send(sockfd, &len, k);
+  std::cerr << "Data 'len' sent: " << sent << std::endl;
 
-  std::cerr << "len sent: " << len << std::endl;
-  SrtClientSend(sockfd, str.c_str(), len);
-  std::cerr << "file sent." << std::endl;
+  sent = Send(sockfd, str.c_str(), len);
+  std::cerr << "Data 'file' sent: " << sent << std::endl;
 
-  sleep(3);
+  sleep(7);
 
-  if(SrtClientDisconnect(sockfd) < 0) {
-    std::cerr << "fail to disconnect from srt server" << std::endl;
-    exit(1);
-  }
-  std::cerr << "Disconnected" << std::endl;
-
-  if(SrtClientClose(sockfd) < 0) {
+  std::cout << "Closing..." << std::endl;
+  if(Close(sockfd) < 0) {
     std::cerr << "fail to close srt client" << std::endl;
     exit(-1);
   }
-  std::cerr << "socket closed" << std::endl;
-
-  SrtClientShutdown();
-  std::cout << "Shutdown" << std::endl;
+  std::cerr << "Closed" << std::endl;
 
   Stop();
-  std::cerr << "Test success" << std::endl;
+  std::cout << "Stopped" << std::endl;
 
+  std::cerr << "Test success" << std::endl;
   return 0;
 }

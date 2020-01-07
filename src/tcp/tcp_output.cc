@@ -53,9 +53,7 @@ int TcpOutput(TcbPtr tcb) {
     hdr.ack = tcb->rcv_nxt;
 
   /* Sequence number */
-  if ((flags & kOutputSyn) == kOutputSyn)
-    tcb->snd_nxt = tcb->iss;
-  if (flags & kOutputSeq)
+  if ((flags & kOutputSeq) || seg_buf->data_size != 0)
     hdr.seq = tcb->snd_nxt;
 
   /* Flags */
@@ -68,17 +66,20 @@ int TcpOutput(TcbPtr tcb) {
 
   hdr.checksum = Checksum(seg_buf->segment, seg_buf->data_size + sizeof(SegmentHeader));
 
-  /* Update */
+  /* Update Sequence number */
   if ((flags & kOutputSyn) == kOutputSyn || 
-      (flags & kOutputFin) == kOutputFin)
-    tcb->snd_nxt += 1;
+      (flags & kOutputFin) == kOutputFin) {
+     tcb->snd_nxt += 1;
+   } else if (seg_buf->data_size != 0) {
+     tcb->snd_nxt += seg_buf->data_size;
+   }
 
   /* Fill the buffer's information */
   seg_buf->dest_ip = tcb->dest_ip;
   seg_buf->src_ip = tcb->src_ip;
   seg_buf->send_time = GetCurrentTime();
 
-  if (flags & kOutputSeq)
+  if ((flags & kOutputSeq) || (flags & kOutputDat))
     tcb->send_buffer.PushBackUnacked(seg_buf);
 
   /* Turn on timer */

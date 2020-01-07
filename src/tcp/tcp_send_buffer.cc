@@ -4,12 +4,13 @@
 #include <common.h>
 #include <ip.h>
 
-int SendBuffer::PushBack(const void *data, uint32_t len) {
+int SendBuffer::PushBack(const void *data, uint32_t data_size) {
   if (Full())
     return -1;
 
   SegBufPtr seg_buf = std::make_shared<SegmentBuffer>();
-  memcpy(seg_buf->segment->data, data, len);
+  memcpy(seg_buf->segment->data, data, data_size);
+  seg_buf->data_size = data_size;
 
   unsent_.push_back(seg_buf);
   return 0;

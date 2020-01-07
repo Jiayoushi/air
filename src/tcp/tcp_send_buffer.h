@@ -6,9 +6,9 @@
 #include <list>
 #include <memory>
 
-#include "timer.h"
-#include "seg.h"
-#include "constants.h"
+#include <timer.h>
+#include <seg.h>
+#include <constants.h>
 
 /* 
  * [unacked] ---- [unsent]

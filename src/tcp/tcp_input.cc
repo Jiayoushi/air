@@ -82,8 +82,10 @@ int TcpInput(SegBufPtr seg_buf) {
       case kSynRcvd: {
         if (flags & kSyn)
           break;
-        if (seg->header.ack != tcb->iss + 1)
+        if (seg->header.ack != tcb->iss + 1) {
+	  std::cout << "[TCP] dropped: unexpected ack" << std::endl;
           return 0;
+	}
 
         std::cout << "[TCP] [Connected]" << std::endl;
 	tcb->send_buffer.Clear();
@@ -99,7 +101,11 @@ int TcpInput(SegBufPtr seg_buf) {
       case kLastAck:
       case kTimeWait: {
         uint32_t last_acked = tcb->send_buffer.Ack(seg->header.ack);
-        std::cout << "[TCP] [Last Acked] " << last_acked << std::endl;
+        std::cout << "[TCP] [Send Buffer]"
+		  << " last_acked=" << last_acked 
+		  << " ,unacked_size=" << tcb->send_buffer.Unacked()
+		  << " ,unsent_size=" << tcb->send_buffer.Unsent()
+		  << std::endl;
         if (last_acked == 0)
 	  break;
 
@@ -172,6 +178,20 @@ int TcpInput(SegBufPtr seg_buf) {
       default:
 	break;
     }
+  }
+
+  if (seg_buf->data_size != 0) {
+    if (seg->header.seq != tcb->rcv_nxt) {
+      std::cout << "[TCP] segment dropped, expected sequence number"
+	        << tcb->rcv_nxt
+		<< " got " << seg->header.seq
+		<< std::endl;
+      return 0;
+    }
+
+    tcb->rcv_nxt += seg_buf->data_size;
+    tcb->recv_buffer.PushBack(seg_buf);
+    tcb->waiting.notify_one();
   }
 
 OUTPUT:
