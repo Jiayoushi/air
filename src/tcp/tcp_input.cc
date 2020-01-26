@@ -119,7 +119,10 @@ int TcpInput(SegBufPtr seg_buf) {
 	    break;
           }
           case kClosing: {
-	    // TODO
+            std::cout << "[TCP] [Time Wait]" << std::endl;
+	    tcb->state = kTimeWait;
+	    tcb->timer_flags |= kTimeWaitTimer;
+            tcb->timers[kTimeWaitTimer] = kTimeWaitPeriod;
 	    break;
 	  }
           case kLastAck: {
