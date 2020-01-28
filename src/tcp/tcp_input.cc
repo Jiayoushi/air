@@ -184,6 +184,9 @@ int TcpInput(SegBufPtr seg_buf) {
   }
 
   if (seg_buf->data_size != 0) {
+    if (tcb->state == kTimeWait)
+      return 0;
+
     if (seg->header.seq != tcb->rcv_nxt) {
       std::cout << "[TCP] segment dropped, expected sequence number"
 	        << tcb->rcv_nxt
